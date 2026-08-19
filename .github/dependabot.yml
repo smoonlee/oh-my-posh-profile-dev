@@ -1,0 +1,15 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+      time: '05:00'
+      timezone: Etc/UTC
+    assignees:
+      - smoonlee
+    commit-message:
+      prefix: '[Dependabot Update] ::'
+    open-pull-requests-limit: 5

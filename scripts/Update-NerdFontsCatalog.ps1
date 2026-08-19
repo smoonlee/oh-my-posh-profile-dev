@@ -2,8 +2,8 @@
 param (
   [string] $DownloadsUrl = 'https://www.nerdfonts.com/font-downloads',
   [string] $FontDataUrl = 'https://raw.githubusercontent.com/ryanoasis/nerd-fonts/gh-pages/_data/fonts.json',
-  [string] $CatalogPath = (Join-Path $PSScriptRoot '..\NerdFontsCatalog.json'),
-  [string] $SetupScriptPath = (Join-Path $PSScriptRoot '..\Invoke-PwshProfileSetup.ps1')
+  [string] $CatalogPath = (Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'NerdFontsCatalog.json'),
+  [string] $SetupScriptPath = (Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'Invoke-PwshProfileSetup.ps1')
 )
 
 $ErrorActionPreference = 'Stop'

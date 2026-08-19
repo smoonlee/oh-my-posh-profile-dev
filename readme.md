@@ -13,14 +13,16 @@ The selected friendly name is resolved to `$nerdFontArchiveName` for downloading
 `$nerdFontArchiveName.zip`. The generated `NerdFontsCatalog.json` also provides the
 current Nerd Fonts release and upstream font version.
 
-The **Update Nerd Fonts catalog** GitHub Actions workflow runs every Sunday at
-06:00 UTC and can also be run manually. It:
+The **Update Nerd Fonts catalog** GitHub Actions workflow runs on `ubuntu-latest`
+every Sunday at 06:00 UTC and can also be run manually. It:
 
 1. Scrapes friendly names, archive names, download URLs, and the release version.
 2. Cross-checks each archive against Nerd Fonts' `fonts.json` for its font version.
 3. Regenerates the `nerdFontName` parameter's `ValidateSet` and the JSON catalog.
 4. Creates or updates a pull request only when the upstream catalog changed and
 	assigns it to `@smoonlee` for review.
+5. Includes the Nerd Fonts release change and lists added, updated, and removed
+	fonts with their relevant versions in the pull request body.
 
 The repository's **Allow GitHub Actions to create and approve pull requests**
 setting must be enabled for the built-in `GITHUB_TOKEN` to create the PR.

@@ -6,12 +6,77 @@
 [Nerd Fonts downloads page](https://www.nerdfonts.com/font-downloads). For example:
 
 ```powershell
-.\Invoke-PwshProfileSetup.ps1 -nerdFontName CaskaydiaCove
+.\Invoke-PwshProfileSetup.ps1 -NerdFont CaskaydiaCove
 ```
+
+`-NerdFont` is an alias for `-nerdFontName`. Supplying either parameter checks
+both `C:\Windows\Fonts` and the current user's
+`%LOCALAPPDATA%\Microsoft\Windows\Fonts` directory for matching `.ttf`, `.otf`, or
+`.ttc` Nerd Font files. If the font is already installed, its matching files are
+reported and no elevation is requested. Otherwise, the script displays the
+Windows UAC prompt and relaunches itself in an Administrator PowerShell 7 session
+for installation. Running the script without a Nerd Font does not request
+Administrator access.
+
+On Windows 11 24H2 or later, enabling Windows sudo in **Inline** or **Input
+closed** mode keeps elevated installation output in the current terminal. If
+Windows sudo is unavailable, disabled, or configured for a new window, the script
+falls back to native UAC, which must start a separate elevated PowerShell process.
+Use `-Verbose` to show the catalog source and elevation fallback guidance.
+
+The standalone script always loads the public catalog directly into the
+`$nerdFontsCatalog` variable for that run. It does not read or create a local
+`NerdFontsCatalog.json`, and no GitHub authentication is required.
 
 The selected friendly name is resolved to `$nerdFontArchiveName` for downloading
 `$nerdFontArchiveName.zip`. The generated `NerdFontsCatalog.json` also provides the
 current Nerd Fonts release and upstream font version.
+
+### Font installation and updates
+
+The script installs the selected font system-wide from its catalog `DownloadUrl`
+and records its Nerd Fonts release per font under
+`HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts`. On later runs it:
+
+- leaves a tracked font unchanged when its release and upstream font version match;
+- updates a tracked font when either version is newer in the catalog;
+- leaves an existing untracked font unchanged and reports that its release is
+	unknown;
+- installs a missing font; and
+- never downgrades a font tracked at a newer Nerd Fonts release.
+
+The registry marker is written only after all selected font files install
+successfully.
+
+When the selected font is installed or already present, the script updates Windows
+Terminal stable and preview settings when present. It sets
+`profiles.defaults.font.face` and `profiles.defaults.font.size` (`10`), updates
+any profile-specific `font.face` and `font.size` overrides, and writes a `.bak`
+backup beside each settings file before saving. Backups are timestamped, for
+example `settings.json.20260819140530.bak`.
+
+The script also prints the exact Windows font family name, which is the value to
+use in VS Code settings such as `editor.fontFamily` and
+`terminal.integrated.fontFamily`.
+
+## Winget package configuration
+
+After the Nerd Font phase, the script checks and silently installs/upgrades the
+developer CLI toolchain with Winget. Machine-scope packages are installed/upgraded
+from an Administrator PowerShell session; Oh My Posh is installed in user scope.
+
+| Package ID | Scope |
+| --- | --- |
+| `Amazon.AWSCLI` | Machine |
+| `Git.Git` | Machine |
+| `GitHub.cli` | Machine |
+| `Hashicorp.Terraform` | Machine |
+| `Helm.Helm` | Machine |
+| `JanDeDobbeleer.OhMyPosh` | User |
+| `Kubernetes.kubectl` | Machine |
+| `Microsoft.Azure.Kubelogin` | Machine |
+| `Microsoft.AzureCLI` | Machine |
+| `Ookla.Speedtest.CLI` | Machine |
 
 The **Update Nerd Fonts catalog** GitHub Actions workflow runs on `ubuntu-latest`
 every Sunday at 06:00 UTC and can also be run manually. It:

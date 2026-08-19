@@ -58,7 +58,7 @@ jobs:
           delete-branch: true
           add-paths: |
             NerdFontsCatalog.json
-            Invoke-PwshProfileSetup.ps1
+            src/Invoke-PwshProfileSetup.ps1
           commit-message: 'Update Nerd Fonts Catalog'
           title: '[GitHub Action]: Update Nerd Font Catalog'
           body: ${{ steps.catalog-changes.outputs.body }}

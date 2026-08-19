@@ -3,7 +3,7 @@ param (
   [string] $DownloadsUrl = 'https://www.nerdfonts.com/font-downloads',
   [string] $FontDataUrl = 'https://raw.githubusercontent.com/ryanoasis/nerd-fonts/gh-pages/_data/fonts.json',
   [string] $CatalogPath = (Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'NerdFontsCatalog.json'),
-  [string] $SetupScriptPath = (Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'Invoke-PwshProfileSetup.ps1')
+  [string] $SetupScriptPath = (Join-Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'src') 'Invoke-PwshProfileSetup.ps1')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +90,8 @@ $generatedBlock = @(
   "$indent[ValidateSet("
   ($generatedValues -join ",`n")
   "$indent)]"
+  "$indent[Parameter(Position = 0)]"
+  "$indent[Alias('NerdFont')]"
   "$indent[string] `$nerdFontName = ''"
   $endMarker
 ) -join "`n"

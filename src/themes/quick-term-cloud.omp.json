@@ -1,0 +1,228 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 4,
+  "final_space": true,
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "os",
+          "style": "diamond",
+          "leading_diamond": "",
+          "trailing_diamond": "",
+          "foreground": "#f2f3f8",
+          "background": "#d75f00",
+          "template": "  {{ .Icon }}  ",
+          "options": {
+            "windows": "\ue70f",
+            "macos": "\ue711",
+            "linux": "\ue712",
+            "ubuntu": "\uf31c",
+            "debian": "\uf306",
+            "fedora": "\uf30a",
+            "arch": "\uf303",
+            "centos": "\uf304",
+            "elementary": "\uf309",
+            "gentoo": "\uf30d",
+            "manjaro": "\uf312",
+            "mint": "\uf30f",
+            "opensuse": "\uf314",
+            "raspbian": "\uf315",
+            "alpine": "\uf300"
+          }
+        },
+        {
+          "type": "path",
+          "style": "powerline",
+          "powerline_symbol": "\ue0b0",
+          "template": " {{ .Path | lower }} ",
+          "foreground": "#ffffff",
+          "background": "#0087af",
+          "options": {
+            "style": "agnoster_short",
+            "max_depth": 3,
+            "folder_icon": "\u2026",
+            "folder_separator_icon": " <transparent>\ue0b1</> "
+          }
+        },
+        {
+          "type": "git",
+          "alias": "git",
+          "min_width": 70,
+          "style": "diamond",
+          "leading_diamond": "",
+          "trailing_diamond": "\ue0b4",
+          "foreground": "#000000",
+          "background": "#52c77a",
+          "background_templates": [
+            "{{ if or (.Working.Changed) (.Staging.Changed) }}#ffa94d{{ end }}",
+            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}#f78c8c{{ end }}",
+            "{{ if gt .Ahead 0 }}#66b3ff{{ end }}",
+            "{{ if gt .Behind 0 }}#ff9966{{ end }}"
+          ],
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }}",
+          "options": {
+            "branch_icon": "\uf418 ",
+            "fetch_status": true,
+            "fetch_upstream_icon": true
+          }
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "right",
+      "segments": [
+        {
+          "type": "executiontime",
+          "min_width": 90,
+          "style": "diamond",
+          "leading_diamond": "\ue0b6",
+          "invert_powerline": true,
+          "foreground": "#585858",
+          "background": "#e4e4e4",
+          "template": " \ueba2 {{ .FormattedMs }} ",
+          "options": {
+            "style": "austin",
+            "always_enabled": true
+          }
+        },
+        {
+          "type": "copilot",
+          "alias": "copilot",
+          "min_width": 140,
+          "style": "powerline",
+          "invert_powerline": true,
+          "foreground": "#111111",
+          "background": "#C06EFF",
+          "background_templates": [
+            "{{ if gt .Premium.Percent 90 }}#ff4d4d{{ end }}",
+            "{{ if gt .Premium.Percent 70 }}#ffa94d{{ end }}"
+          ],
+          "template": " \uec1e  {{ .Premium.Remaining.Gauge }} Used:{{ .Premium.Percent }}% ",
+          "options": {
+            "http_timeout": 5000
+          },
+          "cache": {
+            "duration": "5m",
+            "strategy": "session"
+          }
+        },
+        {
+          "type": "time",
+          "min_width": 80,
+          "style": "diamond",
+          "invert_powerline": true,
+          "leading_diamond": "",
+          "foreground": "#f2f3f8",
+          "background": "#d75f00",
+          "template": " \uf073 {{ .CurrentDate | date .Format }} ",
+          "options": {
+            "time_format": "15:04:05"
+          }
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#d75f00",
+          "template": "\u2570\u2500"
+        },
+        {
+          "type": "kubectl",
+          "alias": "kubernetes",
+          "min_width": 80,
+          "style": "plain",
+          "foreground": "#ffffff",
+          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }} ",
+          "cache": {
+            "duration": "30s",
+            "strategy": "session"
+          }
+        },
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#d75f00",
+          "template": " || "
+        },
+        {
+          "type": "az",
+          "alias": "azure-cli",
+          "min_width": 90,
+          "style": "plain",
+          "foreground": "#ffffff",
+          "template": "\uebd8 : {{ .Name }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          },
+          "options": {
+            "source": "cli"
+          }
+        },
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#d75f00",
+          "template": " || "
+        },
+        {
+          "type": "az",
+          "alias": "azure-pwsh",
+          "min_width": 110,
+          "style": "plain",
+          "foreground": "#ffffff",
+          "template": "\ue683 : {{ .Name }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          },
+          "options": {
+            "source": "pwsh"
+          }
+        },
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#d75f00",
+          "template": " || "
+        },
+        {
+          "type": "aws",
+          "alias": "aws",
+          "min_width": 120,
+          "style": "plain",
+          "foreground": "#ffffff",
+          "template": "\udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          }
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "#d75f00",
+          "template": "{{ if .Root }}#{{ else }}${{ end }}"
+        }
+      ]
+    }
+  ]
+}

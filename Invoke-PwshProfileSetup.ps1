@@ -1,12 +1,83 @@
 [CmdletBinding()]
 param (
   # This region is refreshed by scripts/Update-NerdFontsCatalog.ps1.
-  # BEGIN GENERATED NERD FONT VALIDATESET
-  [ValidateSet(
-    '0xProto',
-  )]
-  [string] $nerdFontName = ''
-  # END GENERATED NERD FONT VALIDATESET
+	# BEGIN GENERATED NERD FONT VALIDATESET
+	[ValidateSet(
+		'0xProto',
+		'3270',
+		'AdwaitaMono',
+		'Agave',
+		'AnnotationM',
+		'AnonymicePro',
+		'Arimo',
+		'AtkynsonMono',
+		'AurulentSansM',
+		'BigBlueTerm',
+		'BitstromWera',
+		'BlexMono',
+		'CaskaydiaCove',
+		'CaskaydiaMono',
+		'CodeNewRoman',
+		'ComicShannsMono',
+		'CommitMono',
+		'Cousine',
+		'D2KodingLigature',
+		'DaddyTimeMono',
+		'DejaVuSansM',
+		'DepartureMono',
+		'DroidSansM',
+		'EnvyCodeR',
+		'FantasqueSansM',
+		'FiraCode',
+		'FiraMono',
+		'GeistMono',
+		'GohuFont',
+		'GoMono',
+		'GoogleSansCode',
+		'Hack',
+		'Hasklug',
+		'HeavyData',
+		'Hurmit',
+		'iMWriting',
+		'Inconsolata',
+		'Inconsolata LGC',
+		'InconsolataGo',
+		'IntoneMono',
+		'Iosevka',
+		'IosevkaTerm',
+		'IosevkaTermSlab',
+		'JetBrainsMono',
+		'Lekton',
+		'Lilex',
+		'LiterationMono',
+		'M+',
+		'MartianMono',
+		'MesloLG',
+		'Monaspice',
+		'Monofur',
+		'Monoid',
+		'Mononoki',
+		'Noto',
+		'OpenDyslexic',
+		'Overpass',
+		'ProFont',
+		'ProggyClean',
+		'RecMono',
+		'RobotoMono',
+		'SauceCodePro',
+		'ShureTechMono',
+		'SpaceMono',
+		'Symbols',
+		'Terminess',
+		'Tinos',
+		'Ubuntu',
+		'UbuntuMono',
+		'UbuntuSans',
+		'VictorMono',
+		'ZedMono'
+	)]
+	[string] $nerdFontName = ''
+	# END GENERATED NERD FONT VALIDATESET
 )
 
 $nerdFontsCatalogPath = Join-Path $PSScriptRoot 'NerdFontsCatalog.json'

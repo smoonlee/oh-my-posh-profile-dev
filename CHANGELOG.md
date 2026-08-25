@@ -7,6 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.3] - 2026-08-25
+
+### Terminal profile reconciliation
+
+- Remove duplicate PowerShell and Azure Cloud Shell profiles instead of
+  appending them after the canonical entries.
+- Enforce the managed profile order while preserving unrelated profiles and
+  remapping settings references to retained standard GUIDs.
+
+### Release sourcing
+
+- Catch and rewrap GitHub Release lookup failures (including a 404 for "no
+  releases published") instead of leaking the raw HTTP exception.
+- Fail the Nerd Font catalog phase with a single clean warning and exit code
+  instead of surfacing an unhandled exception when no stable release exists.
+
 ## [4.0.0-pre-release-0.2] - 2026-08-25
 
 ### Release sourcing

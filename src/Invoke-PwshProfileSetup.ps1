@@ -821,24 +821,40 @@ function Set-WindowsTerminalProfileOrder {
   )
 
   $profileDefinitions = @(
-    [pscustomobject]@{ Role = 'Pwsh7'; Name = 'Pwsh 7' }
-    [pscustomobject]@{ Role = 'Pwsh5'; Name = 'Pwsh 5' }
-    [pscustomobject]@{ Role = 'CommandPrompt'; Name = 'Command Prompt' }
-    [pscustomobject]@{ Role = 'AzureCloudShell'; Name = 'Azure Cloud Shell' }
+    [pscustomobject]@{
+      Role = 'Pwsh7'
+      Name = 'Pwsh 7'
+      PreferredGuid = '574e775e-4f2a-5b96-ac1e-a2962a402336'
+    }
+    [pscustomobject]@{
+      Role = 'Pwsh5'
+      Name = 'Pwsh 5'
+      PreferredGuid = '61c54bbd-c2c6-5271-96e7-009a87ff44bf'
+    }
+    [pscustomobject]@{
+      Role = 'CommandPrompt'
+      Name = 'Command Prompt'
+      PreferredGuid = '0caa0dad-35be-5f56-a8ff-afceeeaa6101'
+    }
+    [pscustomobject]@{
+      Role = 'AzureCloudShell'
+      Name = 'Azure Cloud Shell'
+      PreferredGuid = 'b453ae62-4e3d-5e58-b989-0a998ec441b8'
+    }
   )
   $selectedIndexes = [System.Collections.Generic.HashSet[int]]::new()
   $orderedProfiles = [System.Collections.Generic.List[object]]::new()
+  $guidReplacements = @{}
+  $removedCount = 0
   $changed = $false
 
   foreach ($definition in $profileDefinitions) {
+    $matchingIndexes = [System.Collections.Generic.List[int]]::new()
     for ($index = 0; $index -lt $Profiles.Count; $index++) {
-      if ($selectedIndexes.Contains($index)) {
-        continue
-      }
-
       $profile = $Profiles[$index]
       $guid = ([string]$profile.guid).Trim('{}')
-      $role = if ([string]$profile.source -eq 'Windows.Terminal.PowershellCore') {
+      $role = if ($guid -ieq '574e775e-4f2a-5b96-ac1e-a2962a402336' -or
+        [string]$profile.source -eq 'Windows.Terminal.PowershellCore') {
         'Pwsh7'
       } elseif ($guid -ieq '61c54bbd-c2c6-5271-96e7-009a87ff44bf') {
         'Pwsh5'
@@ -848,21 +864,47 @@ function Set-WindowsTerminalProfileOrder {
         'AzureCloudShell'
       }
 
-      if ($role -ne $definition.Role) {
+      if ($role -eq $definition.Role) {
+        $matchingIndexes.Add($index)
+      }
+    }
+
+    if ($matchingIndexes.Count -eq 0) {
+      continue
+    }
+
+    $selectedIndex = @($matchingIndexes | Where-Object {
+        ([string]$Profiles[$_].guid).Trim('{}') -ieq $definition.PreferredGuid
+      } | Select-Object -First 1)
+    if ($selectedIndex.Count -eq 0) {
+      $selectedIndex = $matchingIndexes[0]
+    } else {
+      $selectedIndex = $selectedIndex[0]
+    }
+
+    $profile = $Profiles[$selectedIndex]
+    $selectedGuid = ([string]$profile.guid).Trim('{}')
+    if ($profile.name -ne $definition.Name) {
+      Set-ObjectPropertyValue -InputObject $profile -Name 'name' -Value $definition.Name
+      $changed = $true
+    }
+    if ($selectedIndex -ne $orderedProfiles.Count) {
+      $changed = $true
+    }
+
+    $orderedProfiles.Add($profile)
+    foreach ($matchingIndex in $matchingIndexes) {
+      [void]$selectedIndexes.Add($matchingIndex)
+      if ($matchingIndex -eq $selectedIndex) {
         continue
       }
 
-      if ($profile.name -ne $definition.Name) {
-        Set-ObjectPropertyValue -InputObject $profile -Name 'name' -Value $definition.Name
-        $changed = $true
+      $removedGuid = ([string]$Profiles[$matchingIndex].guid).Trim('{}')
+      if ($removedGuid -and $selectedGuid) {
+        $guidReplacements[$removedGuid.ToLowerInvariant()] = $selectedGuid
       }
-      if ($index -ne $orderedProfiles.Count) {
-        $changed = $true
-      }
-
-      [void]$selectedIndexes.Add($index)
-      $orderedProfiles.Add($profile)
-      break
+      $removedCount++
+      $changed = $true
     }
   }
 
@@ -875,7 +917,77 @@ function Set-WindowsTerminalProfileOrder {
   [pscustomobject]@{
     Profiles = $orderedProfiles.ToArray()
     Changed = $changed
+    RemovedCount = $removedCount
+    GuidReplacements = $guidReplacements
   }
+}
+
+function Update-WindowsTerminalProfileGuidReferences {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [object] $Settings,
+
+    [Parameter(Mandatory)]
+    [System.Collections.IDictionary] $GuidReplacements
+  )
+
+  $replacementState = @{ Count = 0 }
+  $updateNode = {
+    param([AllowNull()][object] $Node)
+
+    if ($null -eq $Node -or $Node -is [string] -or $Node -is [ValueType]) {
+      return
+    }
+
+    if ($Node -is [System.Collections.IDictionary]) {
+      foreach ($key in @($Node.Keys)) {
+        $value = $Node[$key]
+        if ($value -is [string]) {
+          $normalizedGuid = $value.Trim('{}').ToLowerInvariant()
+          if ($GuidReplacements.Contains($normalizedGuid)) {
+            $Node[$key] = "{$($GuidReplacements[$normalizedGuid])}"
+            $replacementState.Count++
+          }
+        } else {
+          & $updateNode $value
+        }
+      }
+      return
+    }
+
+    if ($Node -is [System.Collections.IList]) {
+      for ($index = 0; $index -lt $Node.Count; $index++) {
+        $value = $Node[$index]
+        if ($value -is [string]) {
+          $normalizedGuid = $value.Trim('{}').ToLowerInvariant()
+          if ($GuidReplacements.Contains($normalizedGuid)) {
+            $Node[$index] = "{$($GuidReplacements[$normalizedGuid])}"
+            $replacementState.Count++
+          }
+        } else {
+          & $updateNode $value
+        }
+      }
+      return
+    }
+
+    foreach ($property in @($Node.PSObject.Properties | Where-Object { $_.IsSettable })) {
+      $value = $property.Value
+      if ($value -is [string]) {
+        $normalizedGuid = $value.Trim('{}').ToLowerInvariant()
+        if ($GuidReplacements.Contains($normalizedGuid)) {
+          $property.Value = "{$($GuidReplacements[$normalizedGuid])}"
+          $replacementState.Count++
+        }
+      } else {
+        & $updateNode $value
+      }
+    }
+  }
+
+  & $updateNode $Settings
+  $replacementState.Count
 }
 
 function Update-WindowsTerminalFontFace {
@@ -942,10 +1054,18 @@ function Update-WindowsTerminalFontFace {
       $changed = $true
     }
 
+    $removedProfileCount = 0
     if ($settings.profiles.list) {
       $profileOrder = Set-WindowsTerminalProfileOrder -Profiles @($settings.profiles.list)
+      $removedProfileCount = $profileOrder.RemovedCount
       if ($profileOrder.Changed) {
         $settings.profiles.list = $profileOrder.Profiles
+        $changed = $true
+      }
+      if ($profileOrder.GuidReplacements.Count -gt 0 -and
+        (Update-WindowsTerminalProfileGuidReferences `
+          -Settings $settings `
+          -GuidReplacements $profileOrder.GuidReplacements) -gt 0) {
         $changed = $true
       }
 
@@ -968,7 +1088,7 @@ function Update-WindowsTerminalFontFace {
       Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Font Size: $FontSize $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Color Scheme: $($ColorScheme.name) $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Starting Directory: $StartingDirectory $statusSuffix"
-      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Profiles: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell; no duplicates; order $statusSuffix"
       continue
     }
 
@@ -985,7 +1105,7 @@ function Update-WindowsTerminalFontFace {
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Color Scheme: $($ColorScheme.name)"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory"
-    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message 'Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell'
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Profiles: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell; removed $removedProfileCount duplicate(s); order enforced"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Config Backup: $backupPath"
   }
 }
@@ -1809,22 +1929,37 @@ function Get-PwshProfileGitHubRelease {
   )
 
   if (-not $Prerelease) {
-    $release = Invoke-RestMethod `
-      -Uri "https://api.github.com/repos/$Repository/releases/latest" `
-      -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-      -TimeoutSec 15 `
-      -ErrorAction Stop
+    try {
+      $release = Invoke-RestMethod `
+        -Uri "https://api.github.com/repos/$Repository/releases/latest" `
+        -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop
+    } catch {
+      # GitHub returns 404 for "no releases published"; treat that as "none found" rather than a hard failure.
+      if ([int]$_.Exception.Response.StatusCode -eq 404) {
+        return $null
+      }
+      throw "Could not query the latest stable GitHub Release for $Repository. $($_.Exception.Message)"
+    }
     if ($release.draft -or $release.prerelease) {
       throw 'The latest stable GitHub Release metadata is invalid.'
     }
     return $release
   }
 
-  $releases = Invoke-RestMethod `
-    -Uri "https://api.github.com/repos/$Repository/releases?per_page=20" `
-    -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-    -TimeoutSec 15 `
-    -ErrorAction Stop
+  try {
+    $releases = Invoke-RestMethod `
+      -Uri "https://api.github.com/repos/$Repository/releases?per_page=20" `
+      -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
+      -TimeoutSec 15 `
+      -ErrorAction Stop
+  } catch {
+    if ([int]$_.Exception.Response.StatusCode -eq 404) {
+      return $null
+    }
+    throw "Could not query GitHub Releases for $Repository. $($_.Exception.Message)"
+  }
   $release = $null
   $selectedVersion = $null
   foreach ($candidate in @($releases | Where-Object { -not $_.draft -and $_.prerelease })) {
@@ -1915,6 +2050,9 @@ function Get-PwshProfileNerdFontsCatalogSource {
   $channel = if ($Prerelease) { 'prerelease' } else { 'stable' }
   $release = Get-PwshProfileGitHubRelease -Repository $Repository -Prerelease:$Prerelease
   if (-not $release) {
+    if (-not $Prerelease) {
+      Write-PwshProfileStatus -Stage 'Catalog' -Type Warning -Message "No published stable release was found for $Repository. Re-run with -Prerelease until a stable GA release is published."
+    }
     throw "No published $channel release is available."
   }
   if ([string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
@@ -2964,7 +3102,13 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Nerd Font Configuration'
 
   $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
-  $catalogSource = Get-PwshProfileNerdFontsCatalogSource -Prerelease:$Prerelease
+  try {
+    $catalogSource = Get-PwshProfileNerdFontsCatalogSource -Prerelease:$Prerelease
+  } catch {
+    Write-PwshProfileStatus -Stage 'Catalog' -Type Danger -Message $_.Exception.Message
+    Write-Host ''
+    exit 1
+  }
   Write-PwshProfileStatus -Stage 'Catalog' -Message "Using verified asset from $($catalogSource.ReleaseTag)."
   $nerdFontsCatalog = Get-NerdFontsCatalog `
     -RemoteUri $catalogSource.Uri `

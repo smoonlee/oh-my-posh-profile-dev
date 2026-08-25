@@ -55,9 +55,12 @@ Terminal stable and preview settings when present. It sets
 `profiles.defaults.font.face`, `profiles.defaults.font.size` (`9`), and
 `profiles.defaults.colorScheme` (`Solarized Dark (modified)`). It creates or
 refreshes that custom scheme without changing unrelated schemes, updates any
-profile-specific `font.face` and `font.size` overrides, and writes a `.bak` backup
-beside each settings file before saving. Backups are timestamped, for example
-`settings.json.20260819140530.bak`.
+profile-specific `font.face` and `font.size` overrides, and reconciles managed
+profiles into this order: `Pwsh 7`, `Pwsh 5`, `Command Prompt`, then
+`Azure Cloud Shell`. Duplicate managed profiles are removed, references to their
+GUIDs are redirected to the retained standard profile, and unrelated profiles
+remain afterward in their existing order. A `.bak` backup is written beside each
+settings file before saving, for example `settings.json.20260819140530.bak`.
 
 The script also prints the exact Windows font family name, which is the value to
 use in VS Code settings such as `editor.fontFamily` and

@@ -684,6 +684,41 @@ function Get-WindowsTerminalSettingsPaths {
   }
 }
 
+function Initialize-CodeDirectory {
+  [CmdletBinding()]
+  param (
+    [string] $CodePath = 'C:\Code',
+
+    [AllowEmptyString()]
+    [string] $OneDrivePath = $env:OneDrive
+  )
+
+  $existingCodePath = Get-Item -LiteralPath $CodePath -Force -ErrorAction SilentlyContinue
+  if ($existingCodePath) {
+    if (-not $existingCodePath.PSIsContainer) {
+      throw "'$CodePath' exists but is not a directory."
+    }
+
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting directory ready: $CodePath"
+    return $CodePath
+  }
+
+  $oneDriveCodePath = if ($OneDrivePath) { Join-Path $OneDrivePath 'Code' }
+  if ($oneDriveCodePath -and (Test-Path -LiteralPath $oneDriveCodePath -PathType Container)) {
+    try {
+      New-Item -ItemType SymbolicLink -Path $CodePath -Target $oneDriveCodePath -ErrorAction Stop | Out-Null
+      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting directory linked: $CodePath -> $oneDriveCodePath"
+      return $CodePath
+    } catch {
+      Write-PwshProfileStatus -Stage 'Terminal' -Type Warning -Message "Could not link '$CodePath' to '$oneDriveCodePath'; creating a local directory instead. $($_.Exception.Message)"
+    }
+  }
+
+  New-Item -ItemType Directory -Path $CodePath -Force -ErrorAction Stop | Out-Null
+  Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting directory created: $CodePath"
+  $CodePath
+}
+
 function Set-ObjectPropertyValue {
   [CmdletBinding()]
   param (
@@ -705,6 +740,72 @@ function Set-ObjectPropertyValue {
   }
 }
 
+function Set-WindowsTerminalProfileOrder {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [AllowEmptyCollection()]
+    [object[]] $Profiles
+  )
+
+  $profileDefinitions = @(
+    [pscustomobject]@{ Role = 'Pwsh7'; Name = 'Pwsh 7' }
+    [pscustomobject]@{ Role = 'Pwsh5'; Name = 'Pwsh 5' }
+    [pscustomobject]@{ Role = 'CommandPrompt'; Name = 'Command Prompt' }
+    [pscustomobject]@{ Role = 'AzureCloudShell'; Name = 'Azure Cloud Shell' }
+  )
+  $selectedIndexes = [System.Collections.Generic.HashSet[int]]::new()
+  $orderedProfiles = [System.Collections.Generic.List[object]]::new()
+  $changed = $false
+
+  foreach ($definition in $profileDefinitions) {
+    for ($index = 0; $index -lt $Profiles.Count; $index++) {
+      if ($selectedIndexes.Contains($index)) {
+        continue
+      }
+
+      $profile = $Profiles[$index]
+      $guid = ([string]$profile.guid).Trim('{}')
+      $role = if ([string]$profile.source -eq 'Windows.Terminal.PowershellCore') {
+        'Pwsh7'
+      } elseif ($guid -ieq '61c54bbd-c2c6-5271-96e7-009a87ff44bf') {
+        'Pwsh5'
+      } elseif ($guid -ieq '0caa0dad-35be-5f56-a8ff-afceeeaa6101') {
+        'CommandPrompt'
+      } elseif ([string]$profile.source -eq 'Windows.Terminal.Azure') {
+        'AzureCloudShell'
+      }
+
+      if ($role -ne $definition.Role) {
+        continue
+      }
+
+      if ($profile.name -ne $definition.Name) {
+        Set-ObjectPropertyValue -InputObject $profile -Name 'name' -Value $definition.Name
+        $changed = $true
+      }
+      if ($index -ne $orderedProfiles.Count) {
+        $changed = $true
+      }
+
+      [void]$selectedIndexes.Add($index)
+      $orderedProfiles.Add($profile)
+      break
+    }
+  }
+
+  for ($index = 0; $index -lt $Profiles.Count; $index++) {
+    if (-not $selectedIndexes.Contains($index)) {
+      $orderedProfiles.Add($Profiles[$index])
+    }
+  }
+
+  [pscustomobject]@{
+    Profiles = $orderedProfiles.ToArray()
+    Changed = $changed
+  }
+}
+
 function Update-WindowsTerminalFontFace {
   [CmdletBinding()]
   param (
@@ -712,6 +813,8 @@ function Update-WindowsTerminalFontFace {
     [string] $FontFace,
 
     [int] $FontSize = 9,
+
+    [string] $StartingDirectory = 'C:\Code',
 
     [switch] $PostInstall,
 
@@ -741,6 +844,10 @@ function Update-WindowsTerminalFontFace {
       Set-ObjectPropertyValue -InputObject $settings.profiles -Name 'defaults' -Value ([pscustomobject]@{})
       $changed = $true
     }
+    if ($settings.profiles.defaults.startingDirectory -ne $StartingDirectory) {
+      Set-ObjectPropertyValue -InputObject $settings.profiles.defaults -Name 'startingDirectory' -Value $StartingDirectory
+      $changed = $true
+    }
     if (-not $settings.profiles.defaults.font) {
       Set-ObjectPropertyValue -InputObject $settings.profiles.defaults -Name 'font' -Value ([pscustomobject]@{})
       $changed = $true
@@ -755,6 +862,12 @@ function Update-WindowsTerminalFontFace {
     }
 
     if ($settings.profiles.list) {
+      $profileOrder = Set-WindowsTerminalProfileOrder -Profiles @($settings.profiles.list)
+      if ($profileOrder.Changed) {
+        $settings.profiles.list = $profileOrder.Profiles
+        $changed = $true
+      }
+
       foreach ($terminalProfile in @($settings.profiles.list)) {
         if ($terminalProfile.font -and $terminalProfile.font.face -and $terminalProfile.font.face -ne $FontFace) {
           $terminalProfile.font.face = $FontFace
@@ -771,6 +884,8 @@ function Update-WindowsTerminalFontFace {
       $statusSuffix = if ($PostInstall) { 'confirmed' } else { 'already configured' }
       Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Install: $FontFace $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell $statusSuffix"
       continue
     }
 
@@ -786,6 +901,8 @@ function Update-WindowsTerminalFontFace {
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Config Backup: $backupPath"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Install: $FontFace"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize"
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory"
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message 'Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell'
   }
 }
 
@@ -801,6 +918,13 @@ function Update-WindowsTerminalFromNerdFontFiles {
     [string[]] $SettingsPaths = @(Get-WindowsTerminalSettingsPaths)
   )
 
+  try {
+    $startingDirectory = Initialize-CodeDirectory
+  } catch {
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Warning -Message "Could not prepare the starting directory: $($_.Exception.Message)"
+    return
+  }
+
   if ($FontFiles.Count -eq 0) {
     Write-PwshProfileStatus -Stage 'Terminal' -Type Warning -Message 'No installed font files were found; settings update skipped.'
     return
@@ -809,9 +933,10 @@ function Update-WindowsTerminalFromNerdFontFiles {
   $fontFace = Get-NerdFontFaceName -FontFile $FontFiles[0]
   Write-PwshProfileStatus -Stage 'Font' -Type Success -Message "Windows font family: $fontFace"
   Write-PwshProfileStatus -Stage 'Terminal' -Message "font.face: $fontFace"
+  Write-PwshProfileStatus -Stage 'Terminal' -Message "startingDirectory: $startingDirectory"
   Write-PwshProfileStatus -Stage 'VS Code' -Message "terminal.integrated.fontFamily: $fontFace"
   Write-PwshProfileStatus -Stage 'VS Code' -Message "editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
-  Update-WindowsTerminalFontFace -FontFace $fontFace -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
+  Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
 }
 
 function Install-NerdFont {

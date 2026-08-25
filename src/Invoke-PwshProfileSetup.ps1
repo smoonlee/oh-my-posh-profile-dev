@@ -1988,8 +1988,21 @@ function Set-PwshExecutionPolicy {
   }
 
   try {
-    & $otherExecutable -NoProfile -Command 'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force' 2>$null
     $otherExecutableName = Split-Path -Path $otherExecutable -Leaf
+    $otherPolicyOutput = & $otherExecutable -NoProfile -Command 'Get-ExecutionPolicy -Scope CurrentUser' 2>$null
+    $otherPolicyExitCode = $LASTEXITCODE
+    $otherPolicy = @($otherPolicyOutput) | Select-Object -First 1
+    if ($otherPolicyExitCode -ne 0 -or -not $otherPolicy) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not read execution policy via $otherExecutableName (exit $otherPolicyExitCode)."
+      return
+    }
+
+    if ([string]$otherPolicy -in @('RemoteSigned', 'Unrestricted', 'Bypass')) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message "Execution policy already $otherPolicy for $otherExecutableName [CurrentUser]."
+      return
+    }
+
+    & $otherExecutable -NoProfile -Command 'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force' 2>$null
     if ($LASTEXITCODE -eq 0) {
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy set to RemoteSigned for $otherExecutableName [CurrentUser]."
     } else {

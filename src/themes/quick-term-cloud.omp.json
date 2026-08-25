@@ -99,15 +99,6 @@
       "alignment": "right",
       "segments": [
         {
-          "type": "status",
-          "style": "diamond",
-          "leading_diamond": "\ue0b6",
-          "invert_powerline": true,
-          "foreground": "p:white",
-          "background": "p:danger",
-          "template": " \uf071 {{ .Code }} "
-        },
-        {
           "type": "executiontime",
           "min_width": 90,
           "style": "diamond",

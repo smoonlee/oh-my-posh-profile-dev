@@ -699,7 +699,6 @@ function Initialize-CodeDirectory {
       throw "'$CodePath' exists but is not a directory."
     }
 
-    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting directory ready: $CodePath"
     return $CodePath
   }
 
@@ -931,10 +930,9 @@ function Update-WindowsTerminalFromNerdFontFiles {
   }
 
   $fontFace = Get-NerdFontFaceName -FontFile $FontFiles[0]
-  Write-PwshProfileStatus -Stage 'Font' -Type Success -Message "Windows font family: $fontFace"
+  Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
   Write-PwshProfileStatus -Stage 'VS Code' -Message "terminal.integrated.fontFamily: $fontFace"
   Write-PwshProfileStatus -Stage 'VS Code' -Message "editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
-  Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
 }
 
 function Install-NerdFont {

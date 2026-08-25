@@ -2151,6 +2151,40 @@ function Get-PwshProfileResetTargets {
   }
 }
 
+function Start-PwshProfileDeferredRemoval {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string[]] $Paths,
+
+    [int] $ParentProcessId = $PID
+  )
+
+  if ($Paths.Count -eq 0) {
+    return
+  }
+
+  $powerShellPath = (Get-Process -Id $PID -ErrorAction Stop).Path
+  $pathsJson = ConvertTo-Json -InputObject @($Paths) -Compress
+  $cleanupScript = @"
+`$paths = ConvertFrom-Json -InputObject '$($pathsJson.Replace("'", "''"))'
+Wait-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
+foreach (`$path in @(`$paths)) {
+  Remove-Item -LiteralPath `$path -Recurse -Force -ErrorAction SilentlyContinue
+}
+"@
+  $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cleanupScript))
+  $arguments = @(
+    '-NoLogo'
+    '-NoProfile'
+    '-NonInteractive'
+    '-EncodedCommand'
+    $encodedCommand
+  )
+
+  Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru -ErrorAction Stop
+}
+
 function Remove-PwshProfileResetItem {
   [CmdletBinding()]
   param (
@@ -2158,7 +2192,10 @@ function Remove-PwshProfileResetItem {
     [string] $Path,
 
     [Parameter(Mandatory)]
-    [string] $Label
+    [string] $Label,
+
+    [AllowNull()]
+    [System.Collections.Generic.List[string]] $DeferredPaths
   )
 
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
@@ -2178,6 +2215,19 @@ function Remove-PwshProfileResetItem {
     Write-PwshProfileStatus -Stage 'Reset' -Type Success -Message "$Label removed: $Path"
     'Removed'
   } catch {
+    if ($null -ne $DeferredPaths -and $item.PSProvider.Name -eq 'FileSystem' -and $item.PSIsContainer -and
+      -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+      $quarantinePath = '{0}.reset-{1}-{2}' -f $Path, $PID, ([guid]::NewGuid().ToString('N'))
+      try {
+        Move-Item -LiteralPath $Path -Destination $quarantinePath -Force -ErrorAction Stop
+        $DeferredPaths.Add($quarantinePath)
+        Write-PwshProfileStatus -Stage 'Reset' -Type Warning -Message "$Label contains files in use; quarantined until this PowerShell session closes: $quarantinePath"
+        return 'Deferred'
+      } catch {
+        Write-Verbose "Could not quarantine '$Path': $($_.Exception.Message)"
+      }
+    }
+
     Write-PwshProfileStatus -Stage 'Reset' -Type Warning -Message "Could not remove $Label '$Path': $($_.Exception.Message)"
     'Failed'
   }
@@ -2286,6 +2336,7 @@ function Invoke-PwshProfileReset {
   Write-Host ''
   Write-PwshProfileStatus -Stage 'Reset' -Type Action -Message 'Removing PowerShell profile and module artifacts...'
   $results = [System.Collections.Generic.List[string]]::new()
+  $deferredPaths = [System.Collections.Generic.List[string]]::new()
 
   # Remove links first so neither PowerShell directory can lead into the other while deleting.
   $powerShellRootItems = @(
@@ -2297,24 +2348,42 @@ function Invoke-PwshProfileReset {
     }
   )
   foreach ($target in @($powerShellRootItems | Where-Object { $_.Item -and ($_.Item.Attributes -band [IO.FileAttributes]::ReparsePoint) })) {
-    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell link'))
+    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell link' -DeferredPaths $deferredPaths))
   }
   foreach ($target in @($powerShellRootItems | Where-Object { -not $_.Item -or -not ($_.Item.Attributes -band [IO.FileAttributes]::ReparsePoint) })) {
-    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell configuration'))
+    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell configuration' -DeferredPaths $deferredPaths))
   }
 
-  $results.Add((Remove-PwshProfileResetItem -Path $Targets.LocalStore -Label 'Local profile store'))
+  $results.Add((Remove-PwshProfileResetItem -Path $Targets.LocalStore -Label 'Local profile store' -DeferredPaths $deferredPaths))
   foreach ($legacyThemePath in @($Targets.LegacyThemes)) {
-    $results.Add((Remove-PwshProfileResetItem -Path $legacyThemePath -Label 'Legacy Oh My Posh theme'))
+    $results.Add((Remove-PwshProfileResetItem -Path $legacyThemePath -Label 'Legacy Oh My Posh theme' -DeferredPaths $deferredPaths))
   }
-  $results.Add((Remove-PwshProfileResetItem -Path $Targets.StateRegistry -Label 'Installer registry state'))
+  $results.Add((Remove-PwshProfileResetItem -Path $Targets.StateRegistry -Label 'Installer registry state' -DeferredPaths $deferredPaths))
+
+  if ($deferredPaths.Count -gt 0) {
+    try {
+      Start-PwshProfileDeferredRemoval -Paths $deferredPaths.ToArray() | Out-Null
+    } catch {
+      Write-PwshProfileStatus -Stage 'Reset' -Type Warning -Message "Could not schedule quarantined folder cleanup: $($_.Exception.Message)"
+      for ($index = 0; $index -lt $results.Count; $index++) {
+        if ($results[$index] -eq 'Deferred') {
+          $results[$index] = 'Failed'
+        }
+      }
+    }
+  }
 
   $removedCount = @($results | Where-Object { $_ -eq 'Removed' }).Count
+  $deferredCount = @($results | Where-Object { $_ -eq 'Deferred' }).Count
   $absentCount = @($results | Where-Object { $_ -eq 'Absent' }).Count
   $failedCount = @($results | Where-Object { $_ -eq 'Failed' }).Count
-  $summaryType = if ($failedCount -gt 0) { 'Warning' } else { 'Success' }
-  Write-PwshProfileStatus -Stage 'Complete' -Type $summaryType -Message "Reset complete: $removedCount removed, $absentCount already absent, $failedCount failed."
-  Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close PowerShell, open a new session, and run the installer again for a clean setup.'
+  $summaryType = if ($failedCount -gt 0 -or $deferredCount -gt 0) { 'Warning' } else { 'Success' }
+  Write-PwshProfileStatus -Stage 'Complete' -Type $summaryType -Message "Reset complete: $removedCount removed, $deferredCount pending session close, $absentCount already absent, $failedCount failed."
+  if ($deferredCount -gt 0) {
+    Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close this PowerShell session to finish deleting in-use module files, then open a new session and run the installer again.'
+  } else {
+    Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close PowerShell, open a new session, and run the installer again for a clean setup.'
+  }
   Invoke-PwshProfileModuleUnload -Modules $loadedModules -Phase Final
 }
 

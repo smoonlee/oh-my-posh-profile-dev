@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.5] - 2026-08-26
+
+### Profile status
+
+- Show the local version and latest published Stable and Preview versions in
+  `Get-PwshProfile` without adding network work to profile startup.
+- Add `Set-PwshProfile -EnableReleaseUpdate` as the explicit Stable counterpart
+  to `Set-PwshProfile -EnablePreReleaseUpdate`.
+- Separate the selected release summary from asset verification output for
+  easier scanning during installation and updates.
+
+### Local development
+
+- Add development-only `-LocalSource` profile installation from the current
+  working tree with validation, hashes, atomic replacement, and a local OTA
+  baseline—without requiring a release commit or tag.
+
 ## [4.0.0-pre-release-0.4] - 2026-08-25
 
 ### OTA channel preference
@@ -90,7 +107,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.4...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.5...HEAD
+[4.0.0-pre-release-0.5]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.4...v4.0.0-pre-release-0.5
 [4.0.0-pre-release-0.4]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.3...v4.0.0-pre-release-0.4
 [4.0.0-pre-release-0.3]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.2...v4.0.0-pre-release-0.3
 [4.0.0-pre-release-0.2]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.2

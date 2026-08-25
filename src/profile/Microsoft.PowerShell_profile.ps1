@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.4'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.5'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -76,7 +76,9 @@ function global:Compare-PwshProfileSemanticVersion {
 
 function global:Get-PwshProfile {
   [CmdletBinding()]
-  param ()
+  param (
+    [switch] $SettingsOnly
+  )
 
   $configPath = Join-Path $env:APPDATA 'PwshProfile\config\settings.json'
   $enablePreReleaseUpdate = $false
@@ -91,7 +93,65 @@ function global:Get-PwshProfile {
     }
   }
 
+  $stableVersion = $null
+  $previewVersion = $null
+  $remoteQuerySucceeded = $false
+  if (-not $SettingsOnly) {
+    try {
+      $releases = Invoke-RestMethod `
+        -Uri 'https://api.github.com/repos/smoonlee/oh-my-posh-profile-dev/releases?per_page=20' `
+        -Headers @{ 'User-Agent' = 'pwsh-profile-status' } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop
+      $remoteQuerySucceeded = $true
+      foreach ($release in @($releases | Where-Object { -not $_.draft })) {
+        if ([string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+          continue
+        }
+
+        $candidateVersion = $Matches.version
+        $isPreview = [bool]$Matches.prerelease
+        if ([bool]$release.prerelease -ne $isPreview) {
+          continue
+        }
+
+        if ($isPreview) {
+          if (-not $previewVersion -or
+            (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $previewVersion) -gt 0) {
+            $previewVersion = $candidateVersion
+          }
+        }
+        elseif (-not $stableVersion -or
+          (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $stableVersion) -gt 0) {
+          $stableVersion = $candidateVersion
+        }
+      }
+    }
+    catch {
+      Write-Warning "Could not query published Pwsh Profile versions. $($_.Exception.Message)"
+    }
+  }
+
   [pscustomobject]@{
+    LocalVersion = $global:PwshProfileVersion
+    StableVersion = if ($stableVersion) {
+      $stableVersion
+    } elseif ($SettingsOnly) {
+      $null
+    } elseif ($remoteQuerySucceeded) {
+      'Not published'
+    } else {
+      'Unavailable'
+    }
+    PreviewVersion = if ($previewVersion) {
+      $previewVersion
+    } elseif ($SettingsOnly) {
+      $null
+    } elseif ($remoteQuerySucceeded) {
+      'Not published'
+    } else {
+      'Unavailable'
+    }
     EnablePreReleaseUpdate = $enablePreReleaseUpdate
     UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
     ConfigPath = $configPath
@@ -99,16 +159,27 @@ function global:Get-PwshProfile {
 }
 
 function global:Set-PwshProfile {
-  [CmdletBinding()]
+  [CmdletBinding(DefaultParameterSetName = 'Status')]
   param (
+    [Parameter(ParameterSetName = 'Stable')]
+    [switch] $EnableReleaseUpdate,
+
+    [Parameter(ParameterSetName = 'Preview')]
     [switch] $EnablePreReleaseUpdate
   )
 
-  if (-not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+  if (-not $PSBoundParameters.ContainsKey('EnableReleaseUpdate') -and
+    -not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
     return Get-PwshProfile
   }
 
-  $current = Get-PwshProfile
+  $usePrerelease = if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
+    $false
+  }
+  else {
+    [bool]$EnablePreReleaseUpdate
+  }
+  $current = Get-PwshProfile -SettingsOnly
   $configPath = $current.ConfigPath
   $configDirectory = Split-Path -Path $configPath -Parent
   if (-not (Test-Path -LiteralPath $configDirectory -PathType Container)) {
@@ -117,7 +188,7 @@ function global:Set-PwshProfile {
 
   $settings = [ordered]@{
     schemaVersion = 1
-    enablePreReleaseUpdate = [bool]$EnablePreReleaseUpdate
+    enablePreReleaseUpdate = $usePrerelease
     updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
   }
   $temporaryPath = "$configPath.$PID.tmp"
@@ -152,7 +223,7 @@ function global:Set-PwshProfile {
   Remove-Item -LiteralPath (Join-Path $env:APPDATA 'PwshProfile\update-state.json') `
     -Force -ErrorAction Ignore
 
-  $channel = if ($EnablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
+  $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
   Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
   Get-PwshProfile
 }
@@ -191,7 +262,7 @@ function global:Get-PwshProfileVersion {
     LatestTag = if ($state) { $state.latestTag } else { $null }
     UpdateAvailable = $updateAvailable
     CheckedChannel = if ($state) { $state.channel } else { $null }
-    ConfiguredChannel = (Get-PwshProfile).UpdateChannel
+    ConfiguredChannel = (Get-PwshProfile -SettingsOnly).UpdateChannel
     LastChecked = if ($state) { $state.checkedAt } else { $null }
     ReleaseUrl = if ($state) { $state.releaseUrl } else { $null }
   }
@@ -213,7 +284,7 @@ function global:Update-PwshProfile {
     [bool]$Prerelease
   }
   else {
-    [bool](Get-PwshProfile).EnablePreReleaseUpdate
+    [bool](Get-PwshProfile -SettingsOnly).EnablePreReleaseUpdate
   }
   & $setupPath -RunPhase ProfileUpdate -Prerelease:$usePrerelease
 }
@@ -535,7 +606,7 @@ Import-PwshProfileModules
 Set-PwshProfileReadLine
 Register-PwshProfileAzureCompletion
 Initialize-PwshProfilePrompt
-$profileSettings = Get-PwshProfile
+$profileSettings = Get-PwshProfile -SettingsOnly
 Start-PwshProfileUpdateCheck `
   -StorePath $script:PwshProfileStorePath `
   -Repository $script:PwshProfileRepository `

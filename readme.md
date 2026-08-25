@@ -144,6 +144,32 @@ To install a published prerelease for testing:
 .\Invoke-PwshProfileSetup.ps1 -RunPhase Profile -Prerelease
 ```
 
+For development, install the current working-tree profile, theme, and setup
+script without creating a commit, tag, or GitHub Release:
+
+```powershell
+.\src\Invoke-PwshProfileSetup.ps1 -LocalSource
+```
+
+Use `ProfileUpdate` when only the local runtime files and baseline need to be
+refreshed, without rerunning cross-platform profile configuration:
+
+```powershell
+.\src\Invoke-PwshProfileSetup.ps1 -RunPhase ProfileUpdate -LocalSource
+```
+
+When `RunPhase` is omitted, `-LocalSource` selects the `Profile` phase. Local
+source mode is intentionally limited to `Profile` and `ProfileUpdate` and cannot
+be combined with `-Prerelease`. It infers the source from the checked-out
+script's `src` directory, validates both PowerShell files, the theme JSON, and
+the embedded SemVer version, verifies staged SHA-256 hashes, then uses the same
+atomic replacement, backup, rollback, and schema v2 baseline model as release
+installation. The baseline channel is recorded as `local`, so a later published
+OTA update can still verify the locally installed files before replacing them.
+
+Local mode explicitly trusts the working tree and therefore bypasses GitHub
+Release metadata and remote asset verification. Use it only for development.
+
 Download `Invoke-PwshProfileSetup.ps1` itself from the desired GitHub Release,
 not from the repository branch. A stable install fails closed when no stable
 release exists; it does not silently select a prerelease.
@@ -159,18 +185,20 @@ The profile embeds a SemVer 2.0 version and provides these commands:
 
 ```powershell
 Get-PwshProfile
+Set-PwshProfile -EnableReleaseUpdate
 Set-PwshProfile -EnablePreReleaseUpdate
 Get-PwshProfileVersion
 Update-PwshProfile
 ```
 
 `Get-PwshProfileVersion` reports the installed version and the latest cached
-release check, including its channel and tag. `Get-PwshProfile` reports the
-persisted OTA channel preference. At most once per day, profile startup launches
-a hidden child PowerShell process to query the configured GitHub Release channel.
-Startup never waits for that network request. A later profile start or reload
-displays a notification when the cached release is newer; installation remains
-manual.
+release check, including its channel and tag. `Get-PwshProfile` reports the local
+version, latest published Stable and Preview versions, and the persisted OTA
+channel preference. The remote versions are queried only when the command is run;
+profile startup does not wait for that request. At most once per day, startup
+launches a hidden child PowerShell process to query the configured GitHub Release
+channel. A later profile start or reload displays a notification when the cached
+release is newer; installation remains manual.
 
 Stable OTA checks are the default. Enable prerelease checks with:
 
@@ -186,11 +214,26 @@ start or reload displays:
 WARNING: Pwsh Profile [Pre Release] Update Available: <tag>. Run Update-PwshProfile to install it.
 ```
 
-Return to stable-only checks with:
+Return to stable-only checks explicitly with:
 
 ```powershell
-Set-PwshProfile -EnablePreReleaseUpdate:$false
+Set-PwshProfile -EnableReleaseUpdate
 ```
+
+`Set-PwshProfile -EnablePreReleaseUpdate:$false` remains supported for scripts
+that used the original disable form.
+
+#### Future settings candidates
+
+These ideas are not implemented yet, but fit naturally under
+`Set-PwshProfile` as the settings surface evolves:
+
+- `-UpdateChannel Stable|Preview` as a concise alternative to channel switches.
+- `-UpdateCheckInterval Daily|Weekly|Manual` for notification frequency.
+- `-NotificationMode Warning|Quiet` to control startup messages.
+- `-Reset` to restore default profile settings and clear update-check state.
+- An explicitly opt-in automatic update policy, only if it preserves the
+  existing integrity, drift-refusal, backup, and rollback guarantees.
 
 `Update-PwshProfile` performs a release update as one tracked unit:
 

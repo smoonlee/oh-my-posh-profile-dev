@@ -87,7 +87,9 @@ param (
 
   [switch] $Reset,
 
-  [switch] $Prerelease
+  [switch] $Prerelease,
+
+  [switch] $LocalSource
 )
 
 function Write-PwshProfileStatus {
@@ -2153,6 +2155,177 @@ function Install-PwshProfileAtomicFile {
   )
 }
 
+function Install-PwshProfileLocalSource {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $SourceRoot,
+
+    [switch] $Bootstrap
+  )
+
+  $operation = if ($Bootstrap) { 'Installation' } else { 'Update' }
+  Write-PwshProfileHeader -Title "Pwsh Profile $operation" -Subtitle 'Validated Local Working Tree'
+
+  $sourceRootPath = [System.IO.Path]::GetFullPath($SourceRoot)
+  $sourcePaths = [ordered]@{
+    profile = Join-Path $sourceRootPath 'profile\Microsoft.PowerShell_profile.ps1'
+    theme = Join-Path $sourceRootPath 'themes\quick-term-cloud.omp.json'
+    setup = Join-Path $sourceRootPath 'Invoke-PwshProfileSetup.ps1'
+  }
+  foreach ($name in $sourcePaths.Keys) {
+    if (-not (Test-Path -LiteralPath $sourcePaths[$name] -PathType Leaf)) {
+      Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local source '$name' was not found: $($sourcePaths[$name])"
+      return $false
+    }
+  }
+
+  $paths = Get-PwshProfileLocalStorePaths
+  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+      New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
+    }
+  }
+  $destinations = [ordered]@{
+    profile = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
+    theme = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
+    setup = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
+  }
+
+  Write-PwshProfileStatus -Stage $operation -Type Warning -Message 'Development mode: release metadata and remote asset verification are intentionally bypassed.'
+  Write-PwshProfileStatus -Stage $operation -Message "Local source: $sourceRootPath"
+  Write-Host ''
+
+  try {
+    Test-PwshProfileScriptFile -Path $sourcePaths.profile -Label 'Local profile'
+    Test-PwshProfileScriptFile -Path $sourcePaths.setup -Label 'Local setup script'
+    $null = Get-Content -LiteralPath $sourcePaths.theme -Raw -ErrorAction Stop |
+      ConvertFrom-Json -ErrorAction Stop
+    $profileContent = Get-Content -LiteralPath $sourcePaths.profile -Raw -ErrorAction Stop
+    if ($profileContent -notmatch "(?m)^\s*\`$script:PwshProfileVersion\s*=\s*'(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)'\s*$") {
+      throw 'The local profile does not declare a valid SemVer 2.0 version.'
+    }
+    $localVersion = $Matches.version
+  }
+  catch {
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local source validation failed; no installed files were changed. $($_.Exception.Message)"
+    return $false
+  }
+
+  $artifactNames = [ordered]@{
+    profile = 'Microsoft.PowerShell_profile.ps1'
+    theme = 'quick-term-cloud.omp.json'
+    setup = 'Invoke-PwshProfileSetup.ps1'
+  }
+  $artifactHashes = [ordered]@{}
+  foreach ($name in $artifactNames.Keys) {
+    $artifactHashes[$name] = (Get-FileHash -LiteralPath $sourcePaths[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
+    Write-PwshProfileStatus -Stage 'Verify' -Type Success -Message "$($artifactNames[$name]) ($($artifactHashes[$name]))"
+  }
+  Write-PwshProfileStatus -Stage 'Verify' -Type Success -Message "PowerShell syntax, theme JSON, and embedded version $localVersion are valid."
+
+  $stagedPaths = @{}
+  $backupTimestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss')
+  $backups = @{}
+  $destinationExisted = @{}
+  $replaced = [System.Collections.Generic.List[string]]::new()
+  $versionTemporaryPath = "$($paths.VersionFile).$PID.tmp"
+  try {
+    foreach ($name in $artifactNames.Keys) {
+      $destinationDirectory = Split-Path -Path $destinations[$name] -Parent
+      if (-not (Test-Path -LiteralPath $destinationDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $destinationDirectory -Force -ErrorAction Stop | Out-Null
+      }
+      $stagedPath = Join-Path $destinationDirectory ".$($artifactNames[$name]).$PID.local"
+      Copy-Item -LiteralPath $sourcePaths[$name] -Destination $stagedPath -Force -ErrorAction Stop
+      $stagedPaths[$name] = $stagedPath
+      $stagedHash = (Get-FileHash -LiteralPath $stagedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($stagedHash -ine $artifactHashes[$name]) {
+        throw "Local source '$name' changed while it was being staged. Run the command again."
+      }
+    }
+
+    foreach ($name in $artifactNames.Keys) {
+      $destinationExisted[$name] = Test-Path -LiteralPath $destinations[$name] -PathType Leaf
+      if ($destinationExisted[$name]) {
+        $localHash = (Get-FileHash -LiteralPath $destinations[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($localHash -ieq $artifactHashes[$name]) {
+          Write-PwshProfileStatus -Stage 'Install' -Type Current -Message "Already verified: $($destinations[$name])"
+          continue
+        }
+      }
+
+      $backupPath = "$($destinations[$name]).$backupTimestamp.bak"
+      Install-PwshProfileAtomicFile `
+        -StagedPath $stagedPaths[$name] `
+        -Destination $destinations[$name] `
+        -BackupPath $backupPath
+      $backups[$name] = $backupPath
+      $replaced.Add($name)
+      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message $destinations[$name]
+    }
+
+    $installedManifest = [ordered]@{
+      schemaVersion = 2
+      version = $localVersion
+      tag = $null
+      channel = 'local'
+      repository = 'smoonlee/oh-my-posh-profile-dev'
+      installedAt = [DateTimeOffset]::UtcNow.ToString('o')
+      artifacts = [ordered]@{}
+    }
+    foreach ($name in $artifactNames.Keys) {
+      $installedManifest.artifacts[$name] = [ordered]@{
+        file = $artifactNames[$name]
+        sha256 = $artifactHashes[$name]
+      }
+    }
+    $versionJson = $installedManifest | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText(
+      [System.IO.Path]::GetFullPath($versionTemporaryPath),
+      "$versionJson`n",
+      [System.Text.UTF8Encoding]::new($false)
+    )
+    if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
+      [System.IO.File]::Replace(
+        [System.IO.Path]::GetFullPath($versionTemporaryPath),
+        [System.IO.Path]::GetFullPath($paths.VersionFile),
+        [System.IO.Path]::GetFullPath("$($paths.VersionFile).$backupTimestamp.bak"),
+        $true
+      )
+    }
+    else {
+      [System.IO.File]::Move($versionTemporaryPath, $paths.VersionFile)
+    }
+  }
+  catch {
+    foreach ($name in @($replaced)) {
+      if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
+        Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction SilentlyContinue
+      }
+      elseif (-not $destinationExisted[$name]) {
+        Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction SilentlyContinue
+      }
+    }
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local installation failed and previous files were restored. $($_.Exception.Message)"
+    return $false
+  }
+  finally {
+    foreach ($stagedPath in $stagedPaths.Values) {
+      Remove-Item -LiteralPath $stagedPath -Force -ErrorAction SilentlyContinue
+    }
+    Remove-Item -LiteralPath $versionTemporaryPath -Force -ErrorAction SilentlyContinue
+  }
+
+  Remove-Item -LiteralPath (Join-Path $paths.Root 'update-state.json') -Force -ErrorAction SilentlyContinue
+  $completedAction = if ($Bootstrap) { 'Installed' } else { 'Updated' }
+  Write-PwshProfileStatus -Stage 'Complete' -Type Success -Message "$completedAction Pwsh Profile v$localVersion from validated local source files."
+  if (-not $Bootstrap) {
+    Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Open a new PowerShell session to load the updated profile.'
+  }
+  return $true
+}
+
 function Invoke-PwshProfileUpdate {
   [CmdletBinding()]
   param (
@@ -2160,8 +2333,14 @@ function Invoke-PwshProfileUpdate {
 
     [switch] $Prerelease,
 
-    [switch] $Bootstrap
+    [switch] $Bootstrap,
+
+    [switch] $LocalSource
   )
+
+  if ($LocalSource) {
+    return Install-PwshProfileLocalSource -SourceRoot $PSScriptRoot -Bootstrap:$Bootstrap
+  }
 
   $operation = if ($Bootstrap) { 'Installation' } else { 'Update' }
   Write-PwshProfileHeader -Title "Pwsh Profile $operation" -Subtitle 'Verified GitHub Release Assets'
@@ -2252,6 +2431,7 @@ function Invoke-PwshProfileUpdate {
 
   $latestVersionText = $Matches.version
   Write-PwshProfileStatus -Stage $operation -Message "Selected release: $($release.tag_name)"
+  Write-Host ''
 
   $drift = [System.Collections.Generic.List[string]]::new()
   if ($installed) {
@@ -2536,12 +2716,17 @@ function Invoke-GitHubConfiguration {
 function Invoke-PwshProfileConfiguration {
   [CmdletBinding()]
   param (
-    [switch] $Prerelease
+    [switch] $Prerelease,
+
+    [switch] $LocalSource
   )
 
-  $releaseInstalled = Invoke-PwshProfileUpdate -Bootstrap -Prerelease:$Prerelease
+  $releaseInstalled = Invoke-PwshProfileUpdate `
+    -Bootstrap `
+    -Prerelease:$Prerelease `
+    -LocalSource:$LocalSource
   if (-not $releaseInstalled) {
-    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Profile configuration stopped because no verified release was installed.'
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Profile configuration stopped because no validated profile source was installed.'
     return
   }
   Invoke-CrossPlatformProfileConfiguration
@@ -3094,6 +3279,18 @@ if ($Reset) {
   return
 }
 
+if ($LocalSource -and -not $PSBoundParameters.ContainsKey('RunPhase')) {
+  $RunPhase = 'Profile'
+}
+
+if ($LocalSource -and $Prerelease) {
+  throw '-LocalSource and -Prerelease cannot be used together.'
+}
+
+if ($LocalSource -and $RunPhase -notin @('Profile', 'ProfileUpdate')) {
+  throw '-LocalSource is supported only with -RunPhase Profile or ProfileUpdate.'
+}
+
 if (-not $nerdFontName -and $RunPhase -in @('All', 'NerdFont')) {
   throw "NerdFontName is required for the All and NerdFont phases unless -Reset is specified. Run 'Get-Help $PSCommandPath -Detailed' for usage."
 }
@@ -3193,9 +3390,9 @@ if ($RunPhase -in @('All', 'Modules')) {
 }
 
 if ($RunPhase -eq 'Profile') {
-  Invoke-PwshProfileConfiguration -Prerelease:$Prerelease
+  Invoke-PwshProfileConfiguration -Prerelease:$Prerelease -LocalSource:$LocalSource
 }
 
 if ($RunPhase -eq 'ProfileUpdate') {
-  [void](Invoke-PwshProfileUpdate -Prerelease:$Prerelease)
+  [void](Invoke-PwshProfileUpdate -Prerelease:$Prerelease -LocalSource:$LocalSource)
 }

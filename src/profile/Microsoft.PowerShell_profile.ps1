@@ -8,11 +8,6 @@ Import-Module -Name Terminal-Icons -ErrorAction SilentlyContinue
 # Oh My Posh - Profile for PowerShell
 oh-my-posh init pwsh --config 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json' | Invoke-Expression
 
-# Force a repaint so the themed prompt shows on the very first render, not just after the first Enter
-if (Get-Command -Name Invoke-PoshPromptRepaint -ErrorAction SilentlyContinue) {
-  Invoke-PoshPromptRepaint
-}
-
 # Azure CLI - IntelliSense Pwsh Support
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&tabs=azure-cli&pivots=winget#enable-tab-completion-on-powershell
 Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
@@ -32,3 +27,7 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
   }
   Remove-Item $completion_file, Env:\_ARGCOMPLETE_STDOUT_FILENAME, Env:\ARGCOMPLETE_USE_TEMPFILES, Env:\COMP_LINE, Env:\COMP_POINT, Env:\_ARGCOMPLETE, Env:\_ARGCOMPLETE_SUPPRESS_SPACE, Env:\_ARGCOMPLETE_IFS, Env:\_ARGCOMPLETE_SHELL
 }
+
+# Clears the 'Loading personal and system profiles...' noise and forces a fresh draw, so the themed
+# prompt renders correctly on the very first line instead of a plain one until the first keypress.
+Clear-Host

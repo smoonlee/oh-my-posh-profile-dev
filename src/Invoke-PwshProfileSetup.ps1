@@ -1450,7 +1450,7 @@ function Invoke-PowerShellModuleAction {
     $latestVersion = [version]$galleryVersion
 
     if ($installedVersion -and $installedVersion -ge $latestVersion) {
-      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) installed $installedVersion (latest) [$($Module.Scope)]"
+      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) installed $installedVersion [latest] [$($Module.Scope)]"
       return 'Current'
     }
 

@@ -2,6 +2,12 @@
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "version": 4,
   "final_space": true,
+  "async": true,
+  "patch_pwsh_bleed": true,
+  "terminal_background": "#0C0C0C",
+  "var": {
+    "dividerColor": "#d75f00"
+  },
   "blocks": [
     {
       "type": "prompt",
@@ -156,7 +162,7 @@
           "min_width": 90,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <#d75f00>||</> \uebd8 : {{ .Name }}",
+          "template": " <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -171,7 +177,7 @@
           "min_width": 110,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <#d75f00>||</> \ue683 : {{ .Name }}",
+          "template": " <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -186,7 +192,7 @@
           "min_width": 120,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <#d75f00>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"

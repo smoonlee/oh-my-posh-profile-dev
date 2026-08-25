@@ -8,6 +8,11 @@ Import-Module -Name Terminal-Icons -ErrorAction SilentlyContinue
 # Oh My Posh - Profile for PowerShell
 oh-my-posh init pwsh --config 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json' | Invoke-Expression
 
+# Force a repaint so the themed prompt shows on the very first render, not just after the first Enter
+if (Get-Command -Name Invoke-PoshPromptRepaint -ErrorAction SilentlyContinue) {
+  Invoke-PoshPromptRepaint
+}
+
 # Azure CLI - IntelliSense Pwsh Support
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&tabs=azure-cli&pivots=winget#enable-tab-completion-on-powershell
 Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {

@@ -721,7 +721,7 @@ function Update-WindowsTerminalFontFace {
     [Parameter(Mandatory)]
     [string] $FontFace,
 
-    [int] $FontSize = 10,
+    [int] $FontSize = 9,
 
     [switch] $PostInstall,
 

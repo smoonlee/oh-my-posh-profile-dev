@@ -118,7 +118,7 @@
           "template": " \ueba2 {{ .FormattedMs }} ",
           "options": {
             "style": "austin",
-            "threshold": 500
+            "always_enabled": true
           }
         },
         {
@@ -131,7 +131,7 @@
           "foreground": "p:black",
           "background": "p:copilot",
           "background_templates": [
-            "{{ if gt .Premium.Percent 90 }}p:danger{{ else if gt .Premium.Percent 70 }}p:warning{{ end }}"
+            "{{ if ge .Premium.Percent 90 }}p:danger{{ else if ge .Premium.Percent 70 }}p:warning{{ end }}"
           ],
           "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}% ",
           "options": {
@@ -173,11 +173,7 @@
           "min_width": 80,
           "style": "plain",
           "foreground": "p:white",
-          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
-          "cache": {
-            "duration": "10s",
-            "strategy": "session"
-          }
+          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}"
         },
         {
           "type": "az",
@@ -188,10 +184,6 @@
           "template": " <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
           "options": {
             "source": "cli"
-          },
-          "cache": {
-            "duration": "10s",
-            "strategy": "session"
           }
         },
         {
@@ -203,10 +195,6 @@
           "template": " <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
           "options": {
             "source": "pwsh"
-          },
-          "cache": {
-            "duration": "10s",
-            "strategy": "session"
           }
         },
         {
@@ -215,11 +203,7 @@
           "min_width": 120,
           "style": "plain",
           "foreground": "p:white",
-          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
-          "cache": {
-            "duration": "10s",
-            "strategy": "session"
-          }
+          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}"
         }
       ]
     },

@@ -2207,13 +2207,12 @@ function Invoke-PwshProfileModuleUnload {
   }
 
   foreach ($module in $modulesToUnload) {
-    try {
-      Remove-Module -ModuleInfo $module -Force -ErrorAction Stop
-      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Unloaded module: $($module.Name) $($module.Version)"
-    } catch {
-      Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "Could not unload module '$($module.Name)' $($module.Version): $($_.Exception.Message)"
-    }
+    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "Unloading module: $($module.Name) $($module.Version)"
   }
+
+  # Keep this as the final operation: unloading foundational modules can remove commands
+  # such as Write-Host and Get-Module from the current session.
+  Remove-Module -ModuleInfo $modulesToUnload -Force -ErrorAction SilentlyContinue
 }
 
 function Invoke-PwshProfileReset {

@@ -144,7 +144,7 @@
           "min_width": 80,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }} ",
+          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
           "cache": {
             "duration": "30s",
             "strategy": "session"

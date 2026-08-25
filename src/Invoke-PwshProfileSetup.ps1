@@ -2168,7 +2168,13 @@ function Start-PwshProfileReplacementSession {
 
     [int] $ParentProcessId = $PID,
 
-    [bool] $StayOpen = $true
+    [bool] $StayOpen = $true,
+
+    [ValidateRange(1, 100)]
+    [int] $CleanupAttempts = 40,
+
+    [ValidateRange(0, 5000)]
+    [int] $CleanupDelayMilliseconds = 250
   )
 
   $powerShellExecutable = if ($PSVersionTable.PSEdition -eq 'Core') {
@@ -2186,9 +2192,23 @@ function Start-PwshProfileReplacementSession {
 Wait-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
 `$failedPaths = @()
 foreach (`$path in @(`$paths)) {
-  try {
-    Remove-Item -LiteralPath `$path -Recurse -Force -ErrorAction Stop
-  } catch {
+  `$removed = `$false
+  for (`$attempt = 1; `$attempt -le $CleanupAttempts; `$attempt++) {
+    try {
+      Remove-Item -LiteralPath `$path -Recurse -Force -ErrorAction Stop
+      `$removed = `$true
+      break
+    } catch {
+      if (-not (Test-Path -LiteralPath `$path)) {
+        `$removed = `$true
+        break
+      }
+      if (`$attempt -lt $CleanupAttempts) {
+        [Threading.Thread]::Sleep($CleanupDelayMilliseconds)
+      }
+    }
+  }
+  if (-not `$removed) {
     `$failedPaths += `$path
   }
 }

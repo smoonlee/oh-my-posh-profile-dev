@@ -66,7 +66,7 @@
           "powerline_symbol": "\ue0b0",
           "foreground": "p:white",
           "background": "p:path",
-          "template": " {{ .Path }} ",
+          "template": " {{ .Path | lower }} ",
           "options": {
             "style": "agnoster_short",
             "max_depth": 3,

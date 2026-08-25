@@ -1540,33 +1540,86 @@ function Show-PowerShellModuleInventory {
   Write-Host ''
 }
 
+function Get-GitHubRawFileContent {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [uri] $RawUri
+  )
+
+  try {
+    $response = Invoke-WebRequest -Uri $RawUri -UseBasicParsing -ErrorAction Stop
+  } catch {
+    throw "Unable to download '$RawUri'. $($_.Exception.Message)"
+  }
+
+  $lastModified = $null
+  $lastModifiedHeader = @($response.Headers['Last-Modified']) | Select-Object -First 1
+  if ($lastModifiedHeader) {
+    try {
+      $lastModified = [datetimeoffset]::Parse($lastModifiedHeader)
+    } catch {
+      $lastModified = $null
+    }
+  }
+
+  [pscustomobject]@{
+    Content = $response.Content
+    LastModified = $lastModified
+  }
+}
+
+function Get-StringSHA256 {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [AllowEmptyString()]
+    [string] $Value
+  )
+
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
+    -join ($hashBytes | ForEach-Object { $_.ToString('x2') })
+  } finally {
+    $sha256.Dispose()
+  }
+}
+
 function Install-PwshProfileConfiguration {
   [CmdletBinding()]
   param (
     [Parameter(Mandatory)]
-    [string] $RepoProfilePath
+    [uri] $RawUri
   )
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Profile Configuration'
 
-  if (-not (Test-Path -LiteralPath $RepoProfilePath -PathType Leaf)) {
-    throw "The repository profile template was not found at '$RepoProfilePath'."
+  try {
+    $remoteFile = Get-GitHubRawFileContent -RawUri $RawUri
+  } catch {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not check GitHub for the latest profile: $($_.Exception.Message)"
+    return
   }
 
   $profilePath = $PROFILE.CurrentUserCurrentHost
   Write-PwshProfileStatus -Stage 'Profile' -Message "Target: $profilePath"
 
-  $newContent = Get-Content -LiteralPath $RepoProfilePath -Raw
-
   if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
     $existingContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction SilentlyContinue
 
-    if ($existingContent -eq $newContent) {
+    if ($existingContent -eq $remoteFile.Content) {
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Already up to date.'
       return
     }
 
-    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'An existing PowerShell profile was found and would be overwritten.'
+    $localLastWriteTime = (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc
+    if ($remoteFile.LastModified -and $remoteFile.LastModified.UtcDateTime -le $localLastWriteTime) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Local profile is newer than the GitHub version; leaving it as-is.'
+      return
+    }
+
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'A newer PowerShell profile is available on GitHub and would overwrite your local copy.'
     $confirmation = Read-Host -Prompt "Overwrite '$profilePath'? A backup will be created first. (y/N)"
     if ($confirmation -notmatch '(?i)^y(es)?$') {
       Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Skipped: user declined to overwrite the existing profile.'
@@ -1585,7 +1638,10 @@ function Install-PwshProfileConfiguration {
     }
   }
 
-  Copy-Item -LiteralPath $RepoProfilePath -Destination $profilePath -Force
+  Set-Content -LiteralPath $profilePath -Value $remoteFile.Content -NoNewline -Encoding UTF8
+  if ($remoteFile.LastModified) {
+    (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
+  }
   Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Installed: $profilePath"
 }
 
@@ -1607,14 +1663,10 @@ function Install-PwshProfileLocalStore {
   [CmdletBinding()]
   param (
     [Parameter(Mandatory)]
-    [string] $RepoThemePath
+    [uri] $ThemeRawUri
   )
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Local Profile Store (OTA Update Baseline)'
-
-  if (-not (Test-Path -LiteralPath $RepoThemePath -PathType Leaf)) {
-    throw "The repository theme file was not found at '$RepoThemePath'."
-  }
 
   $paths = Get-PwshProfileLocalStorePaths
   foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
@@ -1625,34 +1677,46 @@ function Install-PwshProfileLocalStore {
     Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Created: $folder"
   }
 
-  $themeFileName = Split-Path -Path $RepoThemePath -Leaf
-  $themeDestination = Join-Path $paths.Themes $themeFileName
-  $themeHash = (Get-FileHash -LiteralPath $RepoThemePath -Algorithm SHA256).Hash
-
-  $existingVersion = if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
-    try {
-      Get-Content -LiteralPath $paths.VersionFile -Raw | ConvertFrom-Json -ErrorAction Stop
-    } catch {
-      $null
-    }
-  }
-
-  if ($existingVersion -and $existingVersion.theme.sha256 -eq $themeHash) {
-    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme already up to date: $themeDestination"
+  try {
+    $remoteFile = Get-GitHubRawFileContent -RawUri $ThemeRawUri
+  } catch {
+    Write-PwshProfileStatus -Stage 'Store' -Type Warning -Message "Could not check GitHub for the latest theme: $($_.Exception.Message)"
     return
   }
 
-  Copy-Item -LiteralPath $RepoThemePath -Destination $themeDestination -Force
+  $themeFileName = Split-Path -Path $ThemeRawUri.AbsolutePath -Leaf
+  $themeDestination = Join-Path $paths.Themes $themeFileName
+  $remoteHash = Get-StringSHA256 -Value $remoteFile.Content
+
+  if (Test-Path -LiteralPath $themeDestination -PathType Leaf) {
+    $localHash = (Get-FileHash -LiteralPath $themeDestination -Algorithm SHA256).Hash
+    if ($localHash -eq $remoteHash) {
+      Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme already up to date: $themeDestination"
+      return
+    }
+
+    $localLastWriteTime = (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc
+    if ($remoteFile.LastModified -and $remoteFile.LastModified.UtcDateTime -le $localLastWriteTime) {
+      Write-PwshProfileStatus -Stage 'Store' -Type Success -Message 'Local theme is newer than the GitHub version; leaving it as-is.'
+      return
+    }
+  }
+
+  # The theme is safe to auto-overwrite (unlike the .ps1 profile) since it's data, not a script the user could have edited.
+  Set-Content -LiteralPath $themeDestination -Value $remoteFile.Content -NoNewline -Encoding UTF8
+  if ($remoteFile.LastModified) {
+    (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
+  }
   Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme: $themeDestination"
 
-  # sha256 is a stand-in version marker until this repo publishes real release tags for OTA update checks.
   $version = [ordered]@{
     schemaVersion = 1
     updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
     theme = [ordered]@{
       name = [System.IO.Path]::GetFileNameWithoutExtension($themeFileName)
       file = $themeFileName
-      sha256 = $themeHash
+      sha256 = $remoteHash
+      sourceLastModified = if ($remoteFile.LastModified) { $remoteFile.LastModified.ToString('o') } else { $null }
     }
   }
 
@@ -1688,8 +1752,8 @@ function Invoke-PowerShellModuleConfiguration {
   Write-Host ''
   Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
 
-  Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
-  Install-PwshProfileLocalStore -RepoThemePath (Join-Path $PSScriptRoot 'themes\quick-term-cloud.omp.json')
+  Install-PwshProfileConfiguration -RawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/profile/Microsoft.PowerShell_profile.ps1'
+  Install-PwshProfileLocalStore -ThemeRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
   Invoke-CrossPlatformProfileConfiguration
 
   $currentProfilePath = $PROFILE.CurrentUserCurrentHost

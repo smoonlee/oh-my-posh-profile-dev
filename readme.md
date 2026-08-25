@@ -41,7 +41,7 @@ and records its Nerd Fonts release per font under
 - leaves a tracked font unchanged when its release and upstream font version match;
 - updates a tracked font when either version is newer in the catalog;
 - leaves an existing untracked font unchanged and reports that its release is
-	unknown;
+  unknown;
 - installs a missing font; and
 - never downgrades a font tracked at a newer Nerd Fonts release.
 
@@ -50,10 +50,12 @@ successfully.
 
 When the selected font is installed or already present, the script updates Windows
 Terminal stable and preview settings when present. It sets
-`profiles.defaults.font.face` and `profiles.defaults.font.size` (`10`), updates
-any profile-specific `font.face` and `font.size` overrides, and writes a `.bak`
-backup beside each settings file before saving. Backups are timestamped, for
-example `settings.json.20260819140530.bak`.
+`profiles.defaults.font.face`, `profiles.defaults.font.size` (`9`), and
+`profiles.defaults.colorScheme` (`Solarized Dark (modified)`). It creates or
+refreshes that custom scheme without changing unrelated schemes, updates any
+profile-specific `font.face` and `font.size` overrides, and writes a `.bak` backup
+beside each settings file before saving. Backups are timestamped, for example
+`settings.json.20260819140530.bak`.
 
 The script also prints the exact Windows font family name, which is the value to
 use in VS Code settings such as `editor.fontFamily` and
@@ -63,19 +65,26 @@ use in VS Code settings such as `editor.fontFamily` and
 
 After the Nerd Font phase, the script checks and silently installs/upgrades the
 developer CLI toolchain with Winget. Machine-scope packages are installed/upgraded
-from an Administrator PowerShell session; Oh My Posh is installed in user scope.
+from an Administrator PowerShell session; Bicep and Oh My Posh are installed in
+user scope.
 
 | Package ID | Scope |
 | --- | --- |
 | `Amazon.AWSCLI` | Machine |
+| `FireDaemon.OpenSSL` | Machine |
 | `Git.Git` | Machine |
+| `GitHub.Copilot` | Machine |
 | `GitHub.cli` | Machine |
 | `Hashicorp.Terraform` | Machine |
 | `Helm.Helm` | Machine |
 | `JanDeDobbeleer.OhMyPosh` | User |
+| `jqlang.jq` | Machine |
 | `Kubernetes.kubectl` | Machine |
 | `Microsoft.Azure.Kubelogin` | Machine |
 | `Microsoft.AzureCLI` | Machine |
+| `Microsoft.Bicep` | User |
+| `Microsoft.PowerShell` | Machine |
+| `MikeFarah.yq` | Machine |
 | `Ookla.Speedtest.CLI` | Machine |
 
 The **Update Nerd Fonts catalog** GitHub Actions workflow runs on `ubuntu-latest`
@@ -85,9 +94,9 @@ every Sunday at 06:00 UTC and can also be run manually. It:
 2. Cross-checks each archive against Nerd Fonts' `fonts.json` for its font version.
 3. Regenerates the `nerdFontName` parameter's `ValidateSet` and the JSON catalog.
 4. Creates or updates a pull request only when the upstream catalog changed and
-	assigns it to `@smoonlee` for review.
+   assigns it to `@smoonlee` for review.
 5. Includes the Nerd Fonts release change and lists added, updated, and removed
-	fonts with their relevant versions in the pull request body.
+   fonts with their relevant versions in the pull request body.
 
 The repository's **Allow GitHub Actions to create and approve pull requests**
 setting must be enabled for the built-in `GITHUB_TOKEN` to create the PR.
@@ -106,12 +115,14 @@ to the current user's PowerShell profile (`$PROFILE.CurrentUserCurrentHost`), wh
 loads the repository's `quick-term-cloud.omp.json` theme via `oh-my-posh init`.
 
 - If no profile file exists yet, it's created (creating the parent directory if
-	needed).
+  needed).
 - If a profile file already exists and differs from the repository version, the
-	script warns and prompts for confirmation before overwriting. A timestamped
-	backup (for example `Microsoft.PowerShell_profile.ps1.20260825140530.bak`) is
-	created first.
+  script warns and prompts for confirmation before overwriting. A timestamped
+  backup (for example `Microsoft.PowerShell_profile.ps1.20260825140530.bak`) is
+  created first.
 - If the existing profile already matches, nothing is changed.
+- After configuration finishes, the profile is loaded into the current
+  PowerShell session.
 
 Run just this phase with:
 
@@ -119,5 +130,76 @@ Run just this phase with:
 .\Invoke-PwshProfileSetup.ps1 -RunPhase Profile
 ```
 
-> The theme is currently referenced from the `main` branch's raw URL. This will
-> move to a versioned GitHub release asset once a release is published.
+This phase also creates `%APPDATA%\PwshProfile\version.json` using manifest
+schema v2. The manifest records the installed version and SHA-256 hashes of the
+profile, theme, and local updater. Existing schema v1 theme-only manifests are
+migrated the next time this phase runs.
+
+### Profile versions and OTA updates
+
+The profile embeds a SemVer 2.0 version and provides two commands:
+
+```powershell
+Get-PwshProfileVersion
+Update-PwshProfile
+```
+
+`Get-PwshProfileVersion` reports the installed version and the latest cached
+release check. At most once per day, profile startup launches a hidden child
+PowerShell process to query the latest stable GitHub Release. Startup never waits
+for that network request. A later shell displays a notification when the cached
+release is newer; installation remains manual.
+
+`Update-PwshProfile` performs a release update as one tracked unit:
+
+1. Reads the latest stable SemVer 2.0 GitHub Release and its
+  `PwshProfile.release.json` manifest.
+2. Compares all installed files with their schema v2 baseline and refuses the
+  update if the profile, theme, or updater was locally modified or removed.
+3. Downloads the three assets beside their destinations, verifies every SHA-256
+  hash, parses both PowerShell files, validates the theme JSON, and confirms the
+  profile's embedded version.
+4. Replaces the files atomically while retaining timestamped backups. If any
+  replacement or final manifest write fails, the previous files are restored.
+5. Writes `version.json` last and asks you to open a new PowerShell session.
+
+Stable releases are selected by default. Prereleases are never included in the
+daily notification check and require explicit tester opt-in:
+
+```powershell
+Update-PwshProfile -Prerelease
+```
+
+To intentionally accept local files as a new baseline, review them first and run
+the `Profile` setup phase again. The updater never silently overwrites drift.
+
+### Publishing a profile release
+
+The **Publish Pwsh Profile Release** workflow runs when a GitHub Release is
+published. Before creating a release:
+
+1. Set `$script:PwshProfileVersion` in
+  `src/profile/Microsoft.PowerShell_profile.ps1` to a SemVer 2.0 value such as
+  `4.0.0` or `4.0.0-pre-release-0.1`.
+2. Commit and tag that exact revision with the matching `v`-prefixed tag, such
+  as `v4.0.0` or `v4.0.0-pre-release-0.1`.
+3. Publish the GitHub Release for that tag. GitHub's **Set as a pre-release**
+  setting must match whether the SemVer value contains a prerelease component.
+
+The workflow validates the tag and embedded version, parses the profile and
+theme, computes SHA-256 hashes from the tagged files, generates
+`PwshProfile.release.json`, and uploads the profile, theme, setup script, and
+manifest as release assets. It does not overwrite an existing release asset.
+Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md).
+
+### Dynamic prompt updates
+
+The profile exports the current terminal width before every Oh My Posh render.
+The Copilot segment uses a compact icon-and-percentage layout below 140 columns
+and adds its usage gauge from 140 columns upward. Resize changes are reflected
+the next time PowerShell draws a prompt (press Enter); terminals cannot rewrite
+prompt text that has already been drawn.
+
+Execution time and the clock update on every prompt render. Copilot usage is
+cached for one minute per shell session to keep the prompt responsive while
+still providing near-real-time quota updates.

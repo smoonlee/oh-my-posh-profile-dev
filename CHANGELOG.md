@@ -1,0 +1,51 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [4.0.0-pre-release-0.1] - 2026-08-25
+
+### Added
+
+- Embedded SemVer version tracking for the PowerShell profile.
+- `Get-PwshProfileVersion` for installed and cached release status.
+- Daily, non-blocking checks for stable GitHub Releases.
+- Manual stable updates with `Update-PwshProfile` and explicit prerelease opt-in
+  with `Update-PwshProfile -Prerelease`.
+- Release manifests that track the profile, theme, and updater as one versioned
+  unit with SHA-256 hashes.
+- Atomic release installation with timestamped backups and rollback.
+- Local drift detection that refuses to overwrite modified or missing tracked
+  files.
+- GitHub Actions publishing for versioned profile, theme, updater, and manifest
+  release assets.
+
+### Changed
+
+- Restructured the single-file profile into named initialization functions while
+  preserving the existing shell behavior.
+- Migrated the local OTA baseline from the theme-only schema v1 format to schema
+  v2 tracking all release artifacts.
+- Made the local `%APPDATA%\PwshProfile` theme the only runtime prompt source.
+- Added SemVer 2.0 prerelease precedence support to update decisions.
+
+### Fixed
+
+- Preserved responsive compact and detailed Copilot usage rendering without the
+  previous glyph overlap.
+- Kept profile update checks offline-safe and outside the startup-critical path.
+
+### Security
+
+- Verify every downloaded release artifact against its release-manifest SHA-256
+  hash before installation.
+- Validate PowerShell syntax, theme JSON, release metadata, channel, and embedded
+  profile version before replacing installed files.
+- Removed the mutable `main` branch theme fallback from profile startup.
+
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.1...HEAD
+[4.0.0-pre-release-0.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.1

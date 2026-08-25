@@ -1,0 +1,118 @@
+name: Publish Pwsh Profile Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-pwsh-profile-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Validate and stage release assets
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PUBLISHED_AT: ${{ github.event.release.published_at }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+            throw "Release tag '$env:RELEASE_TAG' must use SemVer 2.0, for example v4.0.0 or v4.0.0-pre-release-0.1."
+          }
+
+          $version = $Matches.version
+          $versionIsPrerelease = [bool]$Matches.prerelease
+          $releaseIsPrerelease = [System.Convert]::ToBoolean($env:RELEASE_PRERELEASE)
+          if ($versionIsPrerelease -ne $releaseIsPrerelease) {
+            throw "GitHub Release prerelease state '$releaseIsPrerelease' does not match version '$version'."
+          }
+          $channel = if ($versionIsPrerelease) { 'prerelease' } else { 'stable' }
+          $profilePath = './src/profile/Microsoft.PowerShell_profile.ps1'
+          $themePath = './src/themes/quick-term-cloud.omp.json'
+          $setupPath = './src/Invoke-PwshProfileSetup.ps1'
+          $changelogPath = './CHANGELOG.md'
+          $profileContent = Get-Content -LiteralPath $profilePath -Raw
+
+          if ($profileContent -notmatch "(?m)^\s*\`$script:PwshProfileVersion\s*=\s*'$([regex]::Escape($version))'\s*$") {
+            throw "The profile version must be '$version' before publishing $env:RELEASE_TAG."
+          }
+
+          $changelogContent = Get-Content -LiteralPath $changelogPath -Raw
+          if ($changelogContent -notmatch "(?m)^## \[$([regex]::Escape($version))\](?: - \d{4}-\d{2}-\d{2})?\s*$") {
+            throw "CHANGELOG.md must contain a section for '$version' before publishing $env:RELEASE_TAG."
+          }
+
+          $null = Get-Content -LiteralPath $themePath -Raw | ConvertFrom-Json -ErrorAction Stop
+          foreach ($scriptPath in @($profilePath, $setupPath)) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $scriptPath),
+              [ref]$tokens,
+              [ref]$parseErrors
+            )
+            if ($parseErrors.Count -gt 0) {
+              throw "$scriptPath failed syntax validation: $($parseErrors.Message -join '; ')"
+            }
+          }
+
+          $assetRoot = Join-Path $env:RUNNER_TEMP 'pwsh-profile-release'
+          New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
+          $assets = [ordered]@{
+            profile = [ordered]@{
+              asset = 'Microsoft.PowerShell_profile.ps1'
+              source = 'src/profile/Microsoft.PowerShell_profile.ps1'
+            }
+            theme = [ordered]@{
+              asset = 'quick-term-cloud.omp.json'
+              source = 'src/themes/quick-term-cloud.omp.json'
+            }
+            setup = [ordered]@{
+              asset = 'Invoke-PwshProfileSetup.ps1'
+              source = 'src/Invoke-PwshProfileSetup.ps1'
+            }
+          }
+
+          foreach ($artifact in $assets.Values) {
+            $destination = Join-Path $assetRoot $artifact.asset
+            Copy-Item -LiteralPath $artifact.source -Destination $destination -Force
+            $artifact.sha256 = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+
+          $manifest = [ordered]@{
+            schemaVersion = 1
+            version = $version
+            tag = $env:RELEASE_TAG
+            channel = $channel
+            publishedAt = $env:RELEASE_PUBLISHED_AT
+            repository = '${{ github.repository }}'
+            minimumPowerShellVersion = '5.1'
+            artifacts = $assets
+          }
+          $manifestPath = Join-Path $assetRoot 'PwshProfile.release.json'
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+
+          "assetRoot=$assetRoot" >> $env:GITHUB_ENV
+
+      - name: Upload immutable release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload $env:RELEASE_TAG `
+            (Join-Path $env:assetRoot 'Microsoft.PowerShell_profile.ps1') `
+            (Join-Path $env:assetRoot 'quick-term-cloud.omp.json') `
+            (Join-Path $env:assetRoot 'Invoke-PwshProfileSetup.ps1') `
+            (Join-Path $env:assetRoot 'PwshProfile.release.json')

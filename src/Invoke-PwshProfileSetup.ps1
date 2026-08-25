@@ -1624,6 +1624,8 @@ function Invoke-PowerShellModuleConfiguration {
   if (Test-Path -LiteralPath $currentProfilePath -PathType Leaf) {
     Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the current session profile...'
     try {
+      # Tells the profile to skip its prompt-repaint step, which would otherwise overwrite this script's own output line
+      $env:PwshProfileReloadInProgress = '1'
       . $currentProfilePath
 
       # Dot-sourcing here only redefines 'prompt' in this function's local scope; without
@@ -1636,6 +1638,8 @@ function Invoke-PowerShellModuleConfiguration {
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Session profile reloaded.'
     } catch {
       Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not reload the session profile: $($_.Exception.Message). Restart the shell to pick up the changes."
+    } finally {
+      Remove-Item -LiteralPath Env:\PwshProfileReloadInProgress -ErrorAction SilentlyContinue
     }
   }
 }

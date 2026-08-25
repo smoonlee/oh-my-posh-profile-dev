@@ -1625,6 +1625,14 @@ function Invoke-PowerShellModuleConfiguration {
     Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the current session profile...'
     try {
       . $currentProfilePath
+
+      # Dot-sourcing here only redefines 'prompt' in this function's local scope; without
+      # promoting it, the interactive session's real prompt never changes and the old one
+      # silently remains in place once this function returns.
+      if (Test-Path -LiteralPath Function:\prompt) {
+        Set-Item -Path Function:\global:prompt -Value (Get-Item -LiteralPath Function:\prompt).ScriptBlock
+      }
+
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Session profile reloaded.'
     } catch {
       Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not reload the session profile: $($_.Exception.Message). Restart the shell to pick up the changes."

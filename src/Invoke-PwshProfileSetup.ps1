@@ -1883,6 +1883,7 @@ function Invoke-CrossPlatformProfileConfiguration {
 
   try {
     $paths = Get-CrossPlatformSupportPaths
+    Write-Host ''
     Write-PwshProfileStatus -Stage 'Profile' -Message "Running $($paths.SourceLabel); linking $($paths.TargetLabel) to match."
 
     if (-not (Test-Path -LiteralPath $paths.SourceRoot)) {

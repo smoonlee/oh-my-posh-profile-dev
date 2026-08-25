@@ -2,8 +2,24 @@
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "version": 4,
   "final_space": true,
-  "async": true,
   "patch_pwsh_bleed": true,
+  "palette": {
+    "accent": "#d75f00",
+    "white": "#ffffff",
+    "soft-white": "#f2f3f8",
+    "black": "#111111",
+    "danger": "#da3633",
+    "warning": "#d29922",
+    "path": "#0087af",
+    "git-clean": "#52c77a",
+    "git-modified": "#ffa94d",
+    "git-diverged": "#f78c8c",
+    "git-ahead": "#66b3ff",
+    "git-behind": "#ff9966",
+    "copilot": "#8957e5",
+    "execution-background": "#e4e4e4",
+    "execution-foreground": "#585858"
+  },
   "var": {
     "dividerColor": "#d75f00"
   },
@@ -16,10 +32,8 @@
         {
           "type": "os",
           "style": "diamond",
-          "leading_diamond": "",
-          "trailing_diamond": "",
-          "foreground": "#f2f3f8",
-          "background": "#d75f00",
+          "foreground": "p:soft-white",
+          "background": "p:accent",
           "template": "  {{ .Icon }}  ",
           "options": {
             "windows": "\ue70f",
@@ -42,19 +56,17 @@
         {
           "type": "text",
           "style": "diamond",
-          "leading_diamond": "",
-          "trailing_diamond": "",
-          "foreground": "#ffffff",
-          "background": "#da3633",
+          "foreground": "p:white",
+          "background": "p:danger",
           "template": "{{ if .Root }} \uf071 ELEVATED {{ end }}"
         },
         {
           "type": "path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
-          "template": " {{ .Path | lower }} ",
-          "foreground": "#ffffff",
-          "background": "#0087af",
+          "foreground": "p:white",
+          "background": "p:path",
+          "template": " {{ .Path }} ",
           "options": {
             "style": "agnoster_short",
             "max_depth": 3,
@@ -67,17 +79,13 @@
           "alias": "git",
           "min_width": 70,
           "style": "diamond",
-          "leading_diamond": "",
           "trailing_diamond": "\ue0b4",
-          "foreground": "#000000",
-          "background": "#52c77a",
+          "foreground": "p:black",
+          "background": "p:git-clean",
           "background_templates": [
-            "{{ if or (.Working.Changed) (.Staging.Changed) }}#ffa94d{{ end }}",
-            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}#f78c8c{{ end }}",
-            "{{ if gt .Ahead 0 }}#66b3ff{{ end }}",
-            "{{ if gt .Behind 0 }}#ff9966{{ end }}"
+            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}p:git-diverged{{ else if gt .Ahead 0 }}p:git-ahead{{ else if gt .Behind 0 }}p:git-behind{{ else if or .Working.Changed .Staging.Changed }}p:git-modified{{ end }}"
           ],
-          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }}",
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }} ",
           "options": {
             "branch_icon": "\uf418 ",
             "fetch_status": true,
@@ -95,8 +103,8 @@
           "style": "diamond",
           "leading_diamond": "\ue0b6",
           "invert_powerline": true,
-          "foreground": "#ffffff",
-          "background": "#da3633",
+          "foreground": "p:white",
+          "background": "p:danger",
           "template": " \uf071 {{ .Code }} "
         },
         {
@@ -105,12 +113,12 @@
           "style": "diamond",
           "leading_diamond": "\ue0b6",
           "invert_powerline": true,
-          "foreground": "#585858",
-          "background": "#e4e4e4",
+          "foreground": "p:execution-foreground",
+          "background": "p:execution-background",
           "template": " \ueba2 {{ .FormattedMs }} ",
           "options": {
             "style": "austin",
-            "always_enabled": true
+            "threshold": 500
           }
         },
         {
@@ -120,15 +128,14 @@
           "style": "powerline",
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
-          "foreground": "#111111",
-          "background": "#8957e5",
+          "foreground": "p:black",
+          "background": "p:copilot",
           "background_templates": [
-            "{{ if gt .Premium.Percent 90 }}#da3633{{ end }}",
-            "{{ if gt .Premium.Percent 70 }}#d29922{{ end }}"
+            "{{ if gt .Premium.Percent 90 }}p:danger{{ else if gt .Premium.Percent 70 }}p:warning{{ end }}"
           ],
-          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}% ",
+          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}% ",
           "options": {
-            "http_timeout": 5000
+            "http_timeout": 1000
           },
           "cache": {
             "duration": "5m",
@@ -140,9 +147,8 @@
           "min_width": 80,
           "style": "diamond",
           "invert_powerline": true,
-          "leading_diamond": "",
-          "foreground": "#f2f3f8",
-          "background": "#d75f00",
+          "foreground": "p:soft-white",
+          "background": "p:accent",
           "template": " \uf073 {{ .CurrentDate | date .Format }} ",
           "options": {
             "time_format": "15:04:05"
@@ -158,7 +164,7 @@
         {
           "type": "text",
           "style": "plain",
-          "foreground": "#d75f00",
+          "foreground": "p:accent",
           "template": "\u2570\u2500"
         },
         {
@@ -166,10 +172,10 @@
           "alias": "kubernetes",
           "min_width": 80,
           "style": "plain",
-          "foreground": "#ffffff",
+          "foreground": "p:white",
           "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
           "cache": {
-            "duration": "30s",
+            "duration": "10s",
             "strategy": "session"
           }
         },
@@ -178,14 +184,14 @@
           "alias": "azure-cli",
           "min_width": 90,
           "style": "plain",
-          "foreground": "#ffffff",
+          "foreground": "p:white",
           "template": " <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
-          "cache": {
-            "duration": "1m",
-            "strategy": "session"
-          },
           "options": {
             "source": "cli"
+          },
+          "cache": {
+            "duration": "10s",
+            "strategy": "session"
           }
         },
         {
@@ -193,14 +199,14 @@
           "alias": "azure-pwsh",
           "min_width": 110,
           "style": "plain",
-          "foreground": "#ffffff",
+          "foreground": "p:white",
           "template": " <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
-          "cache": {
-            "duration": "1m",
-            "strategy": "session"
-          },
           "options": {
             "source": "pwsh"
+          },
+          "cache": {
+            "duration": "10s",
+            "strategy": "session"
           }
         },
         {
@@ -208,10 +214,10 @@
           "alias": "aws",
           "min_width": 120,
           "style": "plain",
-          "foreground": "#ffffff",
+          "foreground": "p:white",
           "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
-            "duration": "1m",
+            "duration": "10s",
             "strategy": "session"
           }
         }
@@ -225,9 +231,9 @@
         {
           "type": "text",
           "style": "plain",
-          "foreground": "#d75f00",
+          "foreground": "p:accent",
           "foreground_templates": [
-            "{{ if .Root }}#da3633{{ end }}"
+            "{{ if .Root }}p:danger{{ end }}"
           ],
           "template": "{{ if .Root }}#{{ else }}${{ end }}"
         }

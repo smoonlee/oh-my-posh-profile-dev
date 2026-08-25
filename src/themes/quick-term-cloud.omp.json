@@ -42,7 +42,7 @@
         {
           "type": "root",
           "style": "diamond",
-          "leading_diamond": "\ue0b6",
+          "leading_diamond": "",
           "trailing_diamond": "\ue0b4",
           "foreground": "#ffffff",
           "background": "#da3633",

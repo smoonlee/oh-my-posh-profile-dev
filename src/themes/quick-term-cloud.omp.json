@@ -40,13 +40,13 @@
           }
         },
         {
-          "type": "root",
+          "type": "text",
           "style": "diamond",
           "leading_diamond": "",
           "trailing_diamond": "",
           "foreground": "#ffffff",
           "background": "#da3633",
-          "template": " \uf071 ELEVATED "
+          "template": "{{ if .Root }} \uf071 ELEVATED {{ end }}"
         },
         {
           "type": "path",

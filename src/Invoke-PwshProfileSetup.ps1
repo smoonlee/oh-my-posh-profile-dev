@@ -1755,25 +1755,6 @@ function Invoke-PowerShellModuleConfiguration {
   Install-PwshProfileConfiguration -RawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/profile/Microsoft.PowerShell_profile.ps1'
   Install-PwshProfileLocalStore -ThemeRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
   Invoke-CrossPlatformProfileConfiguration
-
-  $currentProfilePath = $PROFILE.CurrentUserCurrentHost
-  if (Test-Path -LiteralPath $currentProfilePath -PathType Leaf) {
-    try {
-      # Dot-sourcing the profile here only redefines things like 'prompt' in this function's local
-      # scope, not the true interactive global scope, so the live session never actually picks it up.
-      # Re-launching the host process in place is the reliable way to make it load the updated profile.
-      Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the session so the updated profile takes effect...'
-      Write-Host ''
-
-      # Tells the new session's profile to skip Clear-Host, so this install log stays visible.
-      $env:PwshProfileReloadInProgress = '1'
-
-      # https://stackoverflow.com/questions/11546069/refreshing-restarting-powershell-session-w-out-exiting
-      Get-Process -Id $PID | Select-Object -ExpandProperty Path | ForEach-Object { Invoke-Command { & "$_" } -NoNewScope }
-    } catch {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not reload the session: $($_.Exception.Message). Restart the shell to pick up the changes."
-    }
-  }
 }
 
 function Get-CrossPlatformSupportPaths {

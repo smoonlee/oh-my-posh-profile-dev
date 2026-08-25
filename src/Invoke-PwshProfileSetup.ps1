@@ -2187,31 +2187,57 @@ function Invoke-PwshProfileModuleUnload {
   [CmdletBinding()]
   param (
     [AllowEmptyCollection()]
-    [object[]] $Modules = @(Get-Module)
+    [object[]] $Modules = @(Get-Module),
+
+    [ValidateSet('BeforeCleanup', 'Final')]
+    [string] $Phase = 'BeforeCleanup'
   )
 
   $preservedModuleNames = @('PSReadLine', 'PowerShellGet', 'PackageManagement')
   $modulesToUnload = @(
     $Modules |
       Where-Object { $_.Name -notin $preservedModuleNames } |
+      Where-Object {
+      if ($Phase -eq 'BeforeCleanup') {
+        $_.Name -notlike 'Microsoft.PowerShell.*'
+      } else {
+        $_.Name -like 'Microsoft.PowerShell.*'
+      }
+    } |
       Sort-Object Name, Version -Descending
   )
 
-  foreach ($preservedModule in @($Modules | Where-Object { $_.Name -in $preservedModuleNames })) {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message "Preserved loaded module: $($preservedModule.Name) $($preservedModule.Version)"
+  if ($Phase -eq 'BeforeCleanup') {
+    foreach ($preservedModule in @($Modules | Where-Object { $_.Name -in $preservedModuleNames })) {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message "Preserved module: $($preservedModule.Name) $($preservedModule.Version)"
+    }
   }
 
   if ($modulesToUnload.Count -eq 0) {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message 'No other loaded modules require unloading.'
+    if ($Phase -eq 'BeforeCleanup') {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message 'No loaded user modules require unloading.'
+    }
+    return
+  }
+
+  if ($Phase -eq 'BeforeCleanup') {
+    foreach ($module in $modulesToUnload) {
+      try {
+        Remove-Module -ModuleInfo $module -Force -ErrorAction Stop
+        Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Unloaded module: $($module.Name) $($module.Version)"
+      } catch {
+        Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "Could not unload module '$($module.Name)' $($module.Version): $($_.Exception.Message)"
+      }
+    }
     return
   }
 
   foreach ($module in $modulesToUnload) {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "Unloading module: $($module.Name) $($module.Version)"
+    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "Unloading foundational module: $($module.Name) $($module.Version)"
   }
 
-  # Keep this as the final operation: unloading foundational modules can remove commands
-  # such as Write-Host and Get-Module from the current session.
+  # Keep this as the final reset operation: unloading foundational modules can remove
+  # commands such as Write-Host and Get-Module from the current session.
   Remove-Module -ModuleInfo $modulesToUnload -Force -ErrorAction SilentlyContinue
 }
 
@@ -2220,7 +2246,10 @@ function Invoke-PwshProfileReset {
   param (
     [switch] $SkipConfirmation,
 
-    [object] $Targets = (Get-PwshProfileResetTargets)
+    [object] $Targets = (Get-PwshProfileResetTargets),
+
+    [AllowNull()]
+    [object[]] $LoadedModules
   )
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'DESTRUCTIVE Profile Reset'
@@ -2244,6 +2273,15 @@ function Invoke-PwshProfileReset {
       }
     }
   }
+
+  Write-Host ''
+  $loadedModules = if ($PSBoundParameters.ContainsKey('LoadedModules')) {
+    @($LoadedModules)
+  } else {
+    @(Get-Module)
+  }
+  Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message 'Unloading user modules before removing their files...'
+  Invoke-PwshProfileModuleUnload -Modules $loadedModules -Phase BeforeCleanup
 
   Write-Host ''
   Write-PwshProfileStatus -Stage 'Reset' -Type Action -Message 'Removing PowerShell profile and module artifacts...'
@@ -2277,7 +2315,7 @@ function Invoke-PwshProfileReset {
   $summaryType = if ($failedCount -gt 0) { 'Warning' } else { 'Success' }
   Write-PwshProfileStatus -Stage 'Complete' -Type $summaryType -Message "Reset complete: $removedCount removed, $absentCount already absent, $failedCount failed."
   Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close PowerShell, open a new session, and run the installer again for a clean setup.'
-  Invoke-PwshProfileModuleUnload
+  Invoke-PwshProfileModuleUnload -Modules $loadedModules -Phase Final
 }
 
 if ($Reset) {

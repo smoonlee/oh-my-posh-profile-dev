@@ -76,13 +76,13 @@ param (
     'VictorMono',
     'ZedMono'
   )]
-  [Parameter(Position = 0)]
+  [Parameter(Mandatory, Position = 0)]
   [Alias('NerdFont')]
-  [string] $nerdFontName = ''
+  [string] $nerdFontName
   # END GENERATED NERD FONT VALIDATESET
 
   ,
-  [ValidateSet('All', 'NerdFont', 'Winget', 'Profile')]
+  [ValidateSet('All', 'NerdFont', 'Winget', 'Modules')]
   [string] $RunPhase = 'All'
 )
 
@@ -918,6 +918,64 @@ function Get-WingetCommand {
   $winget.Source
 }
 
+function Get-LatestWingetRelease {
+  [CmdletBinding()]
+  param ()
+
+  Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/winget-cli/releases/latest' -ErrorAction Stop
+}
+
+function Update-WingetClient {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $WingetPath
+  )
+
+  try {
+    $currentVersionText = (& $WingetPath --version 2>$null | Select-Object -First 1)
+    if (-not $currentVersionText) {
+      Write-PwshProfileStatus -Stage 'Winget' -Type Warning -Message 'Could not determine the installed winget version; skipping self-update.'
+      return
+    }
+    $currentVersion = [version]($currentVersionText.Trim().TrimStart('v'))
+
+    $release = Invoke-WithRetry -Description 'Check latest winget release' -ScriptBlock {
+      Get-LatestWingetRelease
+    }
+    $latestVersion = [version]($release.tag_name.TrimStart('v'))
+
+    if ($currentVersion -ge $latestVersion) {
+      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Version: $currentVersion (latest)"
+      return
+    }
+
+    Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message "Version: $currentVersion, updating to $latestVersion..."
+
+    $bundleAsset = $release.assets | Where-Object { $_.name -like '*.msixbundle' } | Select-Object -First 1
+    if (-not $bundleAsset) {
+      Write-PwshProfileStatus -Stage 'Winget' -Type Warning -Message 'Latest winget release has no msixbundle asset; skipping self-update.'
+      return
+    }
+
+    $tempRoot = Join-Path $env:TEMP "winget-update-$([guid]::NewGuid())"
+    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    try {
+      $bundlePath = Join-Path $tempRoot $bundleAsset.name
+      Invoke-WithRetry -Description 'Download winget package' -ScriptBlock {
+        Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $bundlePath -UseBasicParsing -ErrorAction Stop
+      }
+
+      Add-AppxPackage -Path $bundlePath -ForceApplicationShutdown -ErrorAction Stop
+      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "winget updated to $latestVersion."
+    } finally {
+      Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  } catch {
+    Write-PwshProfileStatus -Stage 'Winget' -Type Warning -Message "winget self-update failed: $($_.Exception.Message)"
+  }
+}
+
 function Update-WingetSources {
   [CmdletBinding()]
   param (
@@ -925,11 +983,7 @@ function Update-WingetSources {
     [string] $WingetPath
   )
 
-  $wingetVersion = (& $WingetPath --version 2>$null | Select-Object -First 1)
-  if ($wingetVersion) {
-    Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Version: $wingetVersion"
-  }
-
+  Write-Host ''
   Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message 'Updating sources...'
   $sourceUpdateOutput = & $WingetPath source update --disable-interactivity 2>&1
   $sourceUpdateExitCode = $LASTEXITCODE
@@ -974,6 +1028,84 @@ function Test-WingetPackageUpgradeAvailable {
 
   $output = & $WingetPath upgrade --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null | Out-String
   $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($PackageId)
+}
+
+function ConvertFrom-WingetTableRow {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string[]] $Lines,
+
+    [Parameter(Mandatory)]
+    [string] $PackageId
+  )
+
+  $headerIndex = -1
+  for ($i = 0; $i -lt $Lines.Count; $i++) {
+    if ($Lines[$i] -match '^\s*Name\s+Id\s+Version') {
+      $headerIndex = $i
+      break
+    }
+  }
+  if ($headerIndex -lt 0 -or $headerIndex + 2 -ge $Lines.Count) {
+    return $null
+  }
+
+  $header = $Lines[$headerIndex]
+  $columnStarts = [ordered]@{}
+  foreach ($column in @('Name', 'Id', 'Version', 'Available', 'Source')) {
+    $match = [regex]::Match($header, "\b$column\b")
+    if ($match.Success) {
+      $columnStarts[$column] = $match.Index
+    }
+  }
+
+  $dataRow = $Lines[($headerIndex + 2)..($Lines.Count - 1)] | Where-Object { $_ -match [regex]::Escape($PackageId) } | Select-Object -First 1
+  if (-not $dataRow) {
+    return $null
+  }
+
+  $columns = @($columnStarts.Keys)
+  $result = [ordered]@{}
+  for ($i = 0; $i -lt $columns.Count; $i++) {
+    $start = $columnStarts[$columns[$i]]
+    if ($start -ge $dataRow.Length) {
+      continue
+    }
+    $end = if ($i -lt $columns.Count - 1) { $columnStarts[$columns[$i + 1]] } else { $dataRow.Length }
+    $length = [Math]::Min($end, $dataRow.Length) - $start
+    $result[$columns[$i]] = $dataRow.Substring($start, $length).Trim()
+  }
+
+  [pscustomobject]$result
+}
+
+function Get-WingetPackageVersionInfo {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $PackageId,
+
+    [Parameter(Mandatory)]
+    [string] $WingetPath,
+
+    [Parameter(Mandatory)]
+    [ValidateSet('list', 'upgrade')]
+    [string] $Command
+  )
+
+  try {
+    $output = & $WingetPath $Command --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $output) {
+      return $null
+    }
+
+    # Winget emits ANSI colour codes even when output is redirected; strip them before column parsing.
+    $plainLines = $output | ForEach-Object { $_ -replace "`e\[[0-9;]*[a-zA-Z]", '' }
+    ConvertFrom-WingetTableRow -Lines $plainLines -PackageId $PackageId
+  } catch {
+    $null
+  }
 }
 
 function Invoke-WingetElevatedPackageAction {
@@ -1075,13 +1207,12 @@ function Show-WingetPackageInventory {
 
 function Invoke-WingetConfiguration {
   [CmdletBinding()]
-  param (
-    [string] $ScriptPath,
-    [string] $NerdFontName
-  )
+  param ()
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Winget Package Configuration'
 
+  $wingetPath = Get-WingetCommand
+  Update-WingetClient -WingetPath $wingetPath
   $wingetPath = Get-WingetCommand
   Update-WingetSources -WingetPath $wingetPath
 
@@ -1098,19 +1229,315 @@ function Invoke-WingetConfiguration {
     }
   )
 
+  $summary = [ordered]@{
+    Updated = 0
+    Current = 0
+    Failed = 0
+  }
+
   foreach ($state in $packageStates) {
-    if ($state.Installed) {
-      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) installed [$($state.Package.Scope)]"
-      if (Test-WingetPackageUpgradeAvailable -PackageId $state.Package.Id -WingetPath $wingetPath) {
-        Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message "$($state.Package.Id) update available [$($state.Package.Scope)]"
-        Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
+    try {
+      if ($state.Installed) {
+        $installedInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command list
+        $installedVersion = if ($installedInfo -and $installedInfo.Version) { $installedInfo.Version } else { 'unknown version' }
+
+        if (Test-WingetPackageUpgradeAvailable -PackageId $state.Package.Id -WingetPath $wingetPath) {
+          $upgradeInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command upgrade
+          $latestVersion = if ($upgradeInfo -and $upgradeInfo.Available) { $upgradeInfo.Available } else { 'a newer version' }
+          Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message "$($state.Package.Id) installed $installedVersion, updating to $latestVersion [$($state.Package.Scope)]"
+          Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
+          $summary.Updated++
+        } else {
+          Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) installed $installedVersion (latest) [$($state.Package.Scope)]"
+          $summary.Current++
+        }
       } else {
-        Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) latest [$($state.Package.Scope)]"
+        Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action install
+        $summary.Updated++
       }
-    } else {
-      Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action install
+    } catch {
+      Write-PwshProfileStatus -Stage 'Winget' -Type Warning -Message "$($state.Package.Id) failed: $($_.Exception.Message)"
+      $summary.Failed++
     }
   }
+
+  Write-Host ''
+  Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
+}
+
+function Get-PowerShellModuleDefinitions {
+  [CmdletBinding()]
+  param ()
+
+  @(
+    [pscustomobject]@{ Name = 'Az'; Scope = 'CurrentUser'; Notes = 'Azure PowerShell meta module' }
+    [pscustomobject]@{ Name = 'Microsoft.Graph'; Scope = 'CurrentUser'; Notes = 'Microsoft Graph PowerShell meta module' }
+    [pscustomobject]@{ Name = 'PackageManagement'; Scope = 'CurrentUser'; Notes = 'Package provider management' }
+    [pscustomobject]@{ Name = 'Pester'; Scope = 'CurrentUser'; Notes = 'PowerShell testing framework' }
+    [pscustomobject]@{ Name = 'PowerShellGet'; Scope = 'CurrentUser'; Notes = 'PowerShell Gallery tooling' }
+    [pscustomobject]@{ Name = 'PSReadLine'; Scope = 'CurrentUser'; Notes = 'Command-line editing' }
+    [pscustomobject]@{ Name = 'PSRule'; Scope = 'CurrentUser'; Notes = 'Rule engine' }
+    [pscustomobject]@{ Name = 'PSRule.Rules.Azure'; Scope = 'CurrentUser'; Notes = 'Azure rules for PSRule' }
+    [pscustomobject]@{ Name = 'Terminal-Icons'; Scope = 'CurrentUser'; Notes = 'Terminal file icons' }
+  )
+}
+
+function Initialize-PowerShellGallery {
+  [CmdletBinding()]
+  param ()
+
+  if (-not (Get-Command Install-Module -ErrorAction SilentlyContinue)) {
+    throw 'Install-Module was not found. Install PowerShellGet, then rerun this script.'
+  }
+
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+  Write-PwshProfileStatus -Stage 'Modules' -Message 'Checking NuGet package provider...'
+  $nugetProvider = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+
+  if (-not $nugetProvider -or $nugetProvider.Version -lt [version]'2.8.5.201') {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message 'Installing NuGet package provider 2.8.5.201...'
+    Invoke-WithRetry -Description 'Install NuGet provider' -ScriptBlock {
+      Install-PackageProvider -Name NuGet -MinimumVersion '2.8.5.201' -Force -Scope CurrentUser -WarningAction SilentlyContinue -ErrorAction Stop | Out-Null
+    }
+    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'NuGet package provider installed.'
+  } else {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "NuGet package provider $($nugetProvider.Version)."
+  }
+
+  Import-PackageProvider -Name NuGet -Force -ErrorAction Stop | Out-Null
+
+  $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+  if (-not $repository) {
+    throw 'PSGallery repository was not found. Register PSGallery, then rerun this script.'
+  }
+
+  if ($repository.InstallationPolicy -ne 'Trusted') {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message 'Trusting PSGallery repository...'
+    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -WarningAction SilentlyContinue
+    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'PSGallery trusted.'
+  } else {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'PSGallery already trusted.'
+  }
+}
+
+function Invoke-WithRetry {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [scriptblock] $ScriptBlock,
+
+    [Parameter(Mandatory)]
+    [string] $Description,
+
+    [int] $MaxAttempts = 3,
+
+    [int] $DelaySeconds = 5
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      return & $ScriptBlock
+    } catch {
+      if ($attempt -eq $MaxAttempts) {
+        throw "'$Description' failed after $MaxAttempts attempts. $($_.Exception.Message)"
+      }
+      Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "$Description failed ($attempt/$MaxAttempts); retrying in ${DelaySeconds}s..."
+      Start-Sleep -Seconds $DelaySeconds
+    }
+  }
+}
+
+function Get-PowerShellModuleRoot {
+  [CmdletBinding()]
+  param ()
+
+  $documentsPath = [Environment]::GetFolderPath('MyDocuments')
+  $subfolder = if ($PSVersionTable.PSEdition -eq 'Core') { 'PowerShell' } else { 'WindowsPowerShell' }
+  Join-Path $documentsPath "$subfolder\Modules"
+}
+
+function Get-InstalledPowerShellModules {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $Name
+  )
+
+  $moduleRoot = Join-Path (Get-PowerShellModuleRoot) $Name
+  if (-not (Test-Path -LiteralPath $moduleRoot)) {
+    return
+  }
+
+  Get-ChildItem -LiteralPath $moduleRoot -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object {
+    $version = $null
+    if ([version]::TryParse($_.Name, [ref] $version)) {
+      [pscustomobject]@{
+        Name = $Name
+        Version = $version
+        ModuleBase = $_.FullName
+      }
+    }
+  } |
+    Sort-Object Version -Descending
+}
+
+function Remove-OldPowerShellModuleVersions {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $Name
+  )
+
+  $oldModules = @(Get-InstalledPowerShellModules -Name $Name | Select-Object -Skip 1)
+  foreach ($oldModule in $oldModules) {
+    try {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "Removing $Name $($oldModule.Version)"
+      Remove-Module -FullyQualifiedName @{ ModuleName = $Name; ModuleVersion = $oldModule.Version } -Force -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $oldModule.ModuleBase -Recurse -Force -ErrorAction Stop
+      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Removed $Name $($oldModule.Version)."
+    } catch {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "Could not remove $Name $($oldModule.Version); it may be in use."
+    }
+  }
+}
+
+function Get-PowerShellModuleInstallState {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $RegistryPath,
+
+    [Parameter(Mandatory)]
+    [string] $Name
+  )
+
+  if (-not (Test-Path -LiteralPath $RegistryPath)) {
+    return $null
+  }
+
+  $registryState = Get-ItemProperty -LiteralPath $RegistryPath -ErrorAction SilentlyContinue
+  if (-not $registryState -or -not $registryState.PSObject.Properties[$Name]) {
+    return $null
+  }
+
+  try {
+    [version]$registryState.PSObject.Properties[$Name].Value
+  } catch {
+    $null
+  }
+}
+
+function Set-PowerShellModuleInstallState {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $RegistryPath,
+
+    [Parameter(Mandatory)]
+    [string] $Name,
+
+    [Parameter(Mandatory)]
+    [version] $Version
+  )
+
+  if (-not (Test-Path -LiteralPath $RegistryPath)) {
+    New-Item -Path $RegistryPath -Force | Out-Null
+  }
+
+  New-ItemProperty -LiteralPath $RegistryPath -Name $Name -Value $Version.ToString() -PropertyType String -Force | Out-Null
+}
+
+function Invoke-PowerShellModuleAction {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [object] $Module,
+
+    [Parameter(Mandatory)]
+    [string] $StateRegistryPath
+  )
+
+  try {
+    # PackageManagement/PowerShellGet/PSReadLine are bootstrap modules PowerShellGet handles
+    # specially, and can end up saved somewhere our disk scan never finds even with an explicit
+    # -Path. Track our own record of the last version we successfully saved (like the Nerd Font
+    # registry state) so detection doesn't depend solely on locating the files afterward.
+    $diskModule = Get-InstalledPowerShellModules -Name $Module.Name | Select-Object -First 1
+    $trackedVersion = Get-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name
+    $installedVersion = @($diskModule.Version, $trackedVersion) |
+      Where-Object { $_ } |
+      Sort-Object -Descending |
+      Select-Object -First 1
+
+    $galleryVersion = Invoke-WithRetry -Description "Find-Module $($Module.Name)" -ScriptBlock {
+      (Find-Module -Name $Module.Name -Repository PSGallery -ErrorAction Stop).Version
+    }
+    $latestVersion = [version]$galleryVersion
+
+    if ($installedVersion -and $installedVersion -ge $latestVersion) {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) installed $installedVersion (latest) [$($Module.Scope)]"
+      return 'Current'
+    }
+
+    if ($installedVersion) {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "$($Module.Name) installed $installedVersion, updating to $latestVersion [$($Module.Scope)]"
+    } else {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "$($Module.Name) not installed, installing $latestVersion [$($Module.Scope)]"
+    }
+
+    # Save-Module always downloads into the exact path we give it. Install-Module was unreliable
+    # here because it can decide an inbox/AllUsers copy (or an MSIX-packaged PowerShell's own
+    # Modules folder) already "satisfies" the request and silently skip writing anywhere we'd
+    # actually detect on the next run.
+    $moduleRoot = Get-PowerShellModuleRoot
+    if (-not (Test-Path -LiteralPath $moduleRoot)) {
+      New-Item -ItemType Directory -Path $moduleRoot -Force -ErrorAction Stop | Out-Null
+    }
+
+    $previousProgressPreference = $ProgressPreference
+    try {
+      $ProgressPreference = 'SilentlyContinue'
+      Invoke-WithRetry -Description "Save-Module $($Module.Name)" -ScriptBlock {
+        Save-Module -Name $Module.Name -RequiredVersion $latestVersion -Repository PSGallery -Path $moduleRoot -Force -ErrorAction Stop
+      } | Out-Null
+    } finally {
+      $ProgressPreference = $previousProgressPreference
+    }
+
+    Set-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name -Version $latestVersion
+    Remove-OldPowerShellModuleVersions -Name $Module.Name
+    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) ready at $latestVersion [$($Module.Scope)]"
+    return 'Updated'
+  } catch {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "$($Module.Name) failed: $($_.Exception.Message)"
+    return 'Failed'
+  }
+}
+
+function Show-PowerShellModuleInventory {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [object[]] $Modules
+  )
+
+  Write-Host ''
+  Write-PwshProfileStatus -Stage 'Modules' -Message 'Module inventory:'
+  $Modules |
+    Format-Table -Property `
+    @{ Label = 'Module'; Expression = { $_.Name } },
+  @{ Label = 'Scope'; Expression = { $_.Scope } } `
+    -AutoSize |
+    Out-String -Width 120 |
+    ForEach-Object { $_ -split '\r?\n' } |
+    ForEach-Object { $_.TrimEnd() } |
+    Where-Object { $_ } |
+    ForEach-Object { Write-PwshProfileStatus -Stage 'Modules' -Message $_ }
+  Write-Host ''
 }
 
 function Install-PwshProfileConfiguration {
@@ -1162,6 +1589,200 @@ function Install-PwshProfileConfiguration {
   Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Installed: $profilePath"
 }
 
+function Invoke-PowerShellModuleConfiguration {
+  [CmdletBinding()]
+  param ()
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Module Configuration'
+
+  $moduleStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\Modules'
+  Initialize-PowerShellGallery
+  $modules = @(Get-PowerShellModuleDefinitions)
+  Show-PowerShellModuleInventory -Modules $modules
+  Write-PwshProfileStatus -Stage 'Modules' -Message "Checking $($modules.Count) module(s)..."
+
+  $summary = [ordered]@{
+    Updated = 0
+    Current = 0
+    Failed = 0
+  }
+
+  foreach ($module in $modules) {
+    $result = Invoke-PowerShellModuleAction -Module $module -StateRegistryPath $moduleStateRegistryPath
+    if ($summary.Contains($result)) {
+      $summary[$result]++
+    }
+  }
+
+  Write-Host ''
+  Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
+
+  Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
+  Invoke-CrossPlatformProfileConfiguration
+}
+
+function Get-CrossPlatformSupportPaths {
+  [CmdletBinding()]
+  param ()
+
+  $documentsPath = [Environment]::GetFolderPath('MyDocuments')
+  $pwsh7Root = Join-Path $documentsPath 'PowerShell'
+  $pwsh5Root = Join-Path $documentsPath 'WindowsPowerShell'
+  $isPwsh7 = $PSVersionTable.PSVersion.Major -ge 6
+
+  # The host that launched the installer is the source of truth; the other version is linked to it.
+  [pscustomobject]@{
+    SourceRoot = if ($isPwsh7) { $pwsh7Root } else { $pwsh5Root }
+    TargetRoot = if ($isPwsh7) { $pwsh5Root } else { $pwsh7Root }
+    SourceLabel = if ($isPwsh7) { 'PowerShell 7' } else { 'PowerShell 5.1' }
+    TargetLabel = if ($isPwsh7) { 'PowerShell 5.1' } else { 'PowerShell 7' }
+    Pwsh7Root = $pwsh7Root
+  }
+}
+
+function Test-PwshReparsePoint {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return $false
+  }
+
+  [bool]((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)
+}
+
+function Set-PwshSymbolicLink {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $Path,
+
+    [Parameter(Mandatory)]
+    [string] $Target,
+
+    [ValidateSet('Directory', 'File')]
+    [string] $ItemType = 'Directory'
+  )
+
+  try {
+    if (-not (Test-Path -LiteralPath $Target)) {
+      $targetParent = Split-Path -Path $Target -Parent
+      if ($targetParent -and -not (Test-Path -LiteralPath $targetParent)) {
+        New-Item -ItemType Directory -Path $targetParent -Force -ErrorAction Stop | Out-Null
+      }
+      New-Item -ItemType $ItemType -Path $Target -Force -ErrorAction Stop | Out-Null
+      Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message "Created missing target '$Target'."
+    }
+
+    if (Test-Path -LiteralPath $Path) {
+      if (Test-PwshReparsePoint -Path $Path) {
+        $existingTarget = @((Get-Item -LiteralPath $Path -Force).Target) | Select-Object -First 1
+        if ($existingTarget -and $existingTarget.TrimEnd('\') -ieq $Target.TrimEnd('\')) {
+          Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "'$Path' already linked to '$Target'."
+          return
+        }
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+      } elseif ((Get-Item -LiteralPath $Path -Force).PSIsContainer) {
+        if (@(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue).Count -gt 0) {
+          Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "'$Path' has existing content; move it into '$Target' and rerun to link safely."
+          return
+        }
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+      } else {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+      }
+    }
+
+    $pathParent = Split-Path -Path $Path -Parent
+    if ($pathParent -and -not (Test-Path -LiteralPath $pathParent)) {
+      New-Item -ItemType Directory -Path $pathParent -Force -ErrorAction Stop | Out-Null
+    }
+
+    New-Item -ItemType SymbolicLink -Path $Path -Target $Target -Force -ErrorAction Stop | Out-Null
+    Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Linked '$Path' -> '$Target'."
+  } catch {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Failed to link '$Path' -> '$Target': $($_.Exception.Message) (creating symbolic links requires Administrator or Developer Mode)."
+  }
+}
+
+function Set-PwshExecutionPolicy {
+  [CmdletBinding()]
+  param ()
+
+  try {
+    $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
+    if ($currentPolicy -in @('RemoteSigned', 'Unrestricted', 'Bypass')) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy already $currentPolicy for $($PSVersionTable.PSEdition) [CurrentUser]."
+    } else {
+      Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy set to RemoteSigned for $($PSVersionTable.PSEdition) [CurrentUser]."
+    }
+  } catch {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not set execution policy for $($PSVersionTable.PSEdition): $($_.Exception.Message)"
+  }
+
+  # A linked profile is useless to the *other* PowerShell version if its execution policy still blocks scripts,
+  # so set RemoteSigned there too by shelling out to that version's own executable.
+  $otherExecutable = if ($PSVersionTable.PSEdition -eq 'Core') {
+    Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  } else {
+    (Get-Command pwsh -ErrorAction SilentlyContinue).Source
+  }
+
+  if (-not $otherExecutable -or -not (Test-Path -LiteralPath $otherExecutable)) {
+    return
+  }
+
+  try {
+    & $otherExecutable -NoProfile -Command 'Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force' 2>$null
+    $otherExecutableName = Split-Path -Path $otherExecutable -Leaf
+    if ($LASTEXITCODE -eq 0) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy set to RemoteSigned for $otherExecutableName [CurrentUser]."
+    } else {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not set execution policy via $otherExecutableName (exit $LASTEXITCODE)."
+    }
+  } catch {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not set execution policy via '$otherExecutable': $($_.Exception.Message)"
+  }
+}
+
+function Invoke-CrossPlatformProfileConfiguration {
+  [CmdletBinding()]
+  param ()
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Cross-Platform Module & Profile Support'
+
+  Set-PwshExecutionPolicy
+
+  try {
+    $paths = Get-CrossPlatformSupportPaths
+    Write-PwshProfileStatus -Stage 'Profile' -Message "Running $($paths.SourceLabel); linking $($paths.TargetLabel) to match."
+
+    if (-not (Test-Path -LiteralPath $paths.SourceRoot)) {
+      New-Item -ItemType Directory -Path $paths.SourceRoot -Force -ErrorAction Stop | Out-Null
+    }
+
+    Set-PwshSymbolicLink -ItemType Directory `
+      -Path (Join-Path $paths.TargetRoot 'Modules') `
+      -Target (Join-Path $paths.SourceRoot 'Modules')
+
+    Set-PwshSymbolicLink -ItemType File `
+      -Path (Join-Path $paths.TargetRoot 'Microsoft.PowerShell_profile.ps1') `
+      -Target (Join-Path $paths.SourceRoot 'Microsoft.PowerShell_profile.ps1')
+
+    Set-PwshSymbolicLink -ItemType File `
+      -Path (Join-Path $paths.Pwsh7Root 'Microsoft.VSCode_profile.ps1') `
+      -Target (Join-Path $paths.SourceRoot 'Microsoft.PowerShell_profile.ps1')
+
+    Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Cross-platform module and profile support configured.'
+  } catch {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Cross-platform support failed: $($_.Exception.Message)"
+  }
+}
+
 $nerdFontsCatalogUri = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/NerdFontsCatalog.json'
 $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
 $nerdFontsVersion = $null
@@ -1169,7 +1790,6 @@ $nerdFontVersion = $null
 $nerdFontArchiveName = $null
 $nerdFontInstalled = $false
 $installedNerdFontsVersion = $null
-$nerdFontUpdateAvailable = $false
 $installedNerdFontFiles = @()
 
 if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
@@ -1197,7 +1817,6 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
     -LatestNerdFontsVersion $nerdFontsVersion `
     -LatestFontVersion ([string]$nerdFontVersion)
   $installedNerdFontsVersion = $installDecision.InstalledVersion
-  $nerdFontUpdateAvailable = $installDecision.UpdateAvailable
 
   if ($installDecision.IsNewerThanCatalog) {
     Write-PwshProfileStatus -Stage 'Version' -Type Warning -Message "Installed $installedNerdFontsVersion is newer than catalog $nerdFontsVersion; downgrade skipped."
@@ -1205,7 +1824,7 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
 
   if (-not $installDecision.RequiresInstall) {
     if ($installDecision.IsUntracked) {
-      Write-PwshProfileStatus -Stage 'Installed' -Type Warning -Message "$nerdFontName found; release unknown, so it was left unchanged."
+      Write-PwshProfileStatus -Stage 'Found' -Type Warning -Message "$nerdFontName is installed; release unknown, so it was left unchanged."
     } else {
       Write-PwshProfileStatus -Stage 'Current' -Type Success -Message "$nerdFontName at Nerd Fonts $installedNerdFontsVersion."
     }
@@ -1217,7 +1836,6 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
     }
   }
   else {
-
     Write-PwshProfileStatus -Stage 'Action' -Type Action -Message "$nerdFontName requires installation: $($installDecision.Reason)."
     if (-not (Test-PwshProfileAdministrator)) {
       Start-PwshProfileElevated -ScriptPath $PSCommandPath -NerdFontName $nerdFontName -RunPhase 'NerdFont' -Purpose 'Nerd Font installation'
@@ -1230,7 +1848,6 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
       }
     }
     else {
-
       $newlyInstalledFontFiles = @(
         Install-NerdFont `
           -Font $selectedNerdFont `
@@ -1247,9 +1864,9 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
 }
 
 if ($RunPhase -in @('All', 'Winget')) {
-  Invoke-WingetConfiguration -ScriptPath $PSCommandPath -NerdFontName $nerdFontName
+  Invoke-WingetConfiguration
 }
 
-if ($RunPhase -in @('All', 'Profile')) {
-  Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
+if ($RunPhase -in @('All', 'Modules')) {
+  Invoke-PowerShellModuleConfiguration
 }

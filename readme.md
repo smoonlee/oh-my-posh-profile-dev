@@ -155,18 +155,42 @@ migrated the next time this phase runs.
 
 ### Profile versions and OTA updates
 
-The profile embeds a SemVer 2.0 version and provides two commands:
+The profile embeds a SemVer 2.0 version and provides these commands:
 
 ```powershell
+Get-PwshProfile
+Set-PwshProfile -EnablePreReleaseUpdate
 Get-PwshProfileVersion
 Update-PwshProfile
 ```
 
 `Get-PwshProfileVersion` reports the installed version and the latest cached
-release check. At most once per day, profile startup launches a hidden child
-PowerShell process to query the latest stable GitHub Release. Startup never waits
-for that network request. A later shell displays a notification when the cached
-release is newer; installation remains manual.
+release check, including its channel and tag. `Get-PwshProfile` reports the
+persisted OTA channel preference. At most once per day, profile startup launches
+a hidden child PowerShell process to query the configured GitHub Release channel.
+Startup never waits for that network request. A later profile start or reload
+displays a notification when the cached release is newer; installation remains
+manual.
+
+Stable OTA checks are the default. Enable prerelease checks with:
+
+```powershell
+Set-PwshProfile -EnablePreReleaseUpdate
+```
+
+Changing the setting clears the old channel cache, so the next profile start or
+reload launches a fresh hidden check. If a newer prerelease exists, a subsequent
+start or reload displays:
+
+```text
+WARNING: Pwsh Profile [Pre Release] Update Available: <tag>. Run Update-PwshProfile to install it.
+```
+
+Return to stable-only checks with:
+
+```powershell
+Set-PwshProfile -EnablePreReleaseUpdate:$false
+```
 
 `Update-PwshProfile` performs a release update as one tracked unit:
 
@@ -181,11 +205,12 @@ release is newer; installation remains manual.
   replacement or final manifest write fails, the previous files are restored.
 5. Writes `version.json` last and asks you to open a new PowerShell session.
 
-Stable releases are selected by default. Prereleases are never included in the
-daily notification check and require explicit tester opt-in:
+`Update-PwshProfile` uses the persisted channel preference. Either channel can
+still be selected explicitly for one invocation:
 
 ```powershell
 Update-PwshProfile -Prerelease
+Update-PwshProfile -Prerelease:$false
 ```
 
 To intentionally accept local files as a new baseline, review them first and run

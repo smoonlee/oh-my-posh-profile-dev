@@ -7,6 +7,18 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.4] - 2026-08-25
+
+### OTA channel preference
+
+- Add `Get-PwshProfile` and
+  `Set-PwshProfile -EnablePreReleaseUpdate` for persisted stable/prerelease OTA
+  channel selection.
+- Check the configured channel during profile startup and display an explicit
+  `[Pre Release] Update Available` warning from cached background results.
+- Make `Update-PwshProfile` inherit the configured channel while preserving
+  explicit per-invocation overrides.
+
 ## [4.0.0-pre-release-0.3] - 2026-08-25
 
 ### Terminal profile reconciliation
@@ -78,6 +90,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.2...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.4...HEAD
+[4.0.0-pre-release-0.4]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.3...v4.0.0-pre-release-0.4
+[4.0.0-pre-release-0.3]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.2...v4.0.0-pre-release-0.3
 [4.0.0-pre-release-0.2]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.2
 [4.0.0-pre-release-0.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.1

@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.3'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.4'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -74,6 +74,89 @@ function global:Compare-PwshProfileSemanticVersion {
   0
 }
 
+function global:Get-PwshProfile {
+  [CmdletBinding()]
+  param ()
+
+  $configPath = Join-Path $env:APPDATA 'PwshProfile\config\settings.json'
+  $enablePreReleaseUpdate = $false
+  if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+    try {
+      $settings = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+      $enablePreReleaseUpdate = [bool]$settings.enablePreReleaseUpdate
+    }
+    catch {
+      Write-Warning "Ignoring invalid Pwsh Profile settings at '$configPath'."
+    }
+  }
+
+  [pscustomobject]@{
+    EnablePreReleaseUpdate = $enablePreReleaseUpdate
+    UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
+    ConfigPath = $configPath
+  }
+}
+
+function global:Set-PwshProfile {
+  [CmdletBinding()]
+  param (
+    [switch] $EnablePreReleaseUpdate
+  )
+
+  if (-not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+    return Get-PwshProfile
+  }
+
+  $current = Get-PwshProfile
+  $configPath = $current.ConfigPath
+  $configDirectory = Split-Path -Path $configPath -Parent
+  if (-not (Test-Path -LiteralPath $configDirectory -PathType Container)) {
+    New-Item -ItemType Directory -Path $configDirectory -Force -ErrorAction Stop | Out-Null
+  }
+
+  $settings = [ordered]@{
+    schemaVersion = 1
+    enablePreReleaseUpdate = [bool]$EnablePreReleaseUpdate
+    updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
+  }
+  $temporaryPath = "$configPath.$PID.tmp"
+  $backupPath = "$configPath.$PID.bak"
+  $json = $settings | ConvertTo-Json -Depth 3
+  try {
+    [System.IO.File]::WriteAllText(
+      [System.IO.Path]::GetFullPath($temporaryPath),
+      "$json`n",
+      [System.Text.UTF8Encoding]::new($false)
+    )
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+      [System.IO.File]::Replace(
+        [System.IO.Path]::GetFullPath($temporaryPath),
+        [System.IO.Path]::GetFullPath($configPath),
+        [System.IO.Path]::GetFullPath($backupPath),
+        $true
+      )
+    }
+    else {
+      [System.IO.File]::Move(
+        [System.IO.Path]::GetFullPath($temporaryPath),
+        [System.IO.Path]::GetFullPath($configPath)
+      )
+    }
+  }
+  finally {
+    Remove-Item -LiteralPath $temporaryPath, $backupPath -Force -ErrorAction Ignore
+  }
+
+  # Force the newly selected channel to be checked on the next profile load.
+  Remove-Item -LiteralPath (Join-Path $env:APPDATA 'PwshProfile\update-state.json') `
+    -Force -ErrorAction Ignore
+
+  $channel = if ($EnablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
+  Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
+  Get-PwshProfile
+}
+
 function global:Get-PwshProfileVersion {
   [CmdletBinding()]
   param ()
@@ -105,7 +188,10 @@ function global:Get-PwshProfileVersion {
   [pscustomobject]@{
     CurrentVersion = $global:PwshProfileVersion
     LatestVersion = $latestVersion
+    LatestTag = if ($state) { $state.latestTag } else { $null }
     UpdateAvailable = $updateAvailable
+    CheckedChannel = if ($state) { $state.channel } else { $null }
+    ConfiguredChannel = (Get-PwshProfile).UpdateChannel
     LastChecked = if ($state) { $state.checkedAt } else { $null }
     ReleaseUrl = if ($state) { $state.releaseUrl } else { $null }
   }
@@ -123,7 +209,13 @@ function global:Update-PwshProfile {
     return
   }
 
-  & $setupPath -RunPhase ProfileUpdate -Prerelease:$Prerelease
+  $usePrerelease = if ($PSBoundParameters.ContainsKey('Prerelease')) {
+    [bool]$Prerelease
+  }
+  else {
+    [bool](Get-PwshProfile).EnablePreReleaseUpdate
+  }
+  & $setupPath -RunPhase ProfileUpdate -Prerelease:$usePrerelease
 }
 
 function Import-PwshProfileModules {
@@ -286,9 +378,12 @@ function Start-PwshProfileUpdateCheck {
     [string] $Repository,
 
     [Parameter(Mandatory)]
-    [string] $CurrentVersion
+    [string] $CurrentVersion,
+
+    [switch] $Prerelease
   )
 
+  $channel = if ($Prerelease) { 'prerelease' } else { 'stable' }
   $statePath = Join-Path $StorePath 'update-state.json'
   $state = if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     try {
@@ -300,12 +395,18 @@ function Start-PwshProfileUpdateCheck {
     }
   }
 
-  if ($state -and $state.latestVersion) {
+  if ($state -and $state.channel -eq $channel -and $state.latestVersion) {
     try {
       if ((Compare-PwshProfileSemanticVersion `
         -Left ([string]$state.latestVersion) `
         -Right $CurrentVersion) -gt 0) {
-        Write-Warning "Pwsh Profile v$($state.latestVersion) is available. Run Update-PwshProfile to install it."
+        $latestTag = if ($state.latestTag) { [string]$state.latestTag } else { "v$($state.latestVersion)" }
+        if ($Prerelease) {
+          Write-Warning "Pwsh Profile [Pre Release] Update Available: $latestTag. Run Update-PwshProfile to install it."
+        }
+        else {
+          Write-Warning "Pwsh Profile Update Available: $latestTag. Run Update-PwshProfile to install it."
+        }
       }
     }
     catch {
@@ -317,7 +418,8 @@ function Start-PwshProfileUpdateCheck {
   if ($state -and $state.checkedAt) {
     [void][DateTimeOffset]::TryParse([string]$state.checkedAt, [ref]$checkedAt)
   }
-  if ([DateTimeOffset]::UtcNow - $checkedAt -lt [TimeSpan]::FromDays(1)) {
+  if ($state -and $state.channel -eq $channel -and
+    [DateTimeOffset]::UtcNow - $checkedAt -lt [TimeSpan]::FromDays(1)) {
     return
   }
 
@@ -332,10 +434,12 @@ function Start-PwshProfileUpdateCheck {
   }
 
   $pendingState = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
+    channel = $channel
     checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
-    latestVersion = if ($state) { $state.latestVersion } else { $null }
-    releaseUrl = if ($state) { $state.releaseUrl } else { $null }
+    latestVersion = if ($state -and $state.channel -eq $channel) { $state.latestVersion } else { $null }
+    latestTag = if ($state -and $state.channel -eq $channel) { $state.latestTag } else { $null }
+    releaseUrl = if ($state -and $state.channel -eq $channel) { $state.releaseUrl } else { $null }
     error = $null
   }
   $pendingJson = $pendingState | ConvertTo-Json -Depth 3
@@ -343,33 +447,71 @@ function Start-PwshProfileUpdateCheck {
 
   $escapedStatePath = $statePath.Replace("'", "''")
   $escapedRepository = $Repository.Replace("'", "''")
-  $checkScript = @"
-`$statePath = '$escapedStatePath'
-`$state = [ordered]@{
-  schemaVersion = 1
+  $compareFunctionBody = ${function:global:Compare-PwshProfileSemanticVersion}.ToString()
+  $checkTemplate = @'
+function Compare-PwshProfileSemanticVersion {
+__COMPARE_FUNCTION_BODY__
+}
+
+$statePath = '__STATE_PATH__'
+$repository = '__REPOSITORY__'
+$prerelease = [bool]::Parse('__PRERELEASE__')
+$channel = if ($prerelease) { 'prerelease' } else { 'stable' }
+$state = [ordered]@{
+  schemaVersion = 2
+  channel = $channel
   checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
-  latestVersion = `$null
-  releaseUrl = `$null
-  error = `$null
+  latestVersion = $null
+  latestTag = $null
+  releaseUrl = $null
+  error = $null
 }
 try {
-  `$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/$escapedRepository/releases/latest' -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
-  if (-not `$release.prerelease -and [string]`$release.tag_name -match '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
-    `$state.latestVersion = `$Matches.version
-    `$state.releaseUrl = [string]`$release.html_url
+  if ($prerelease) {
+    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases?per_page=20" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
+    $release = $null
+    $selectedVersion = $null
+    foreach ($candidate in @($releases | Where-Object { -not $_.draft -and $_.prerelease })) {
+      if ([string]$candidate.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+        continue
+      }
+      $candidateVersion = $Matches.version
+      if (-not $release -or
+        (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
+        $release = $candidate
+        $selectedVersion = $candidateVersion
+      }
+    }
   }
   else {
-    `$state.error = 'The latest stable release tag is not valid SemVer.'
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases/latest" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
+    if ($release.draft -or $release.prerelease -or
+      [string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+      throw 'The latest stable release tag is not valid SemVer.'
+    }
+    $selectedVersion = $Matches.version
   }
+
+  if (-not $release) {
+    throw "No published $channel release is available."
+  }
+  $state.latestVersion = $selectedVersion
+  $state.latestTag = [string]$release.tag_name
+  $state.releaseUrl = [string]$release.html_url
 }
 catch {
-  `$state.error = `$_.Exception.Message
+  $state.error = $_.Exception.Message
 }
-`$json = `$state | ConvertTo-Json -Depth 3
-`$temporaryPath = "`$statePath.`$PID.tmp"
-[System.IO.File]::WriteAllText(`$temporaryPath, "`$json``n", [System.Text.UTF8Encoding]::new(`$false))
-Move-Item -LiteralPath `$temporaryPath -Destination `$statePath -Force
-"@
+$json = $state | ConvertTo-Json -Depth 3
+$temporaryPath = "$statePath.$PID.tmp"
+[System.IO.File]::WriteAllText($temporaryPath, "$json`n", [System.Text.UTF8Encoding]::new($false))
+Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
+'@
+  $checkScript = $checkTemplate.
+  Replace('__COMPARE_FUNCTION_BODY__', $compareFunctionBody).
+  Replace('__STATE_PATH__', $escapedStatePath).
+  Replace('__REPOSITORY__', $escapedRepository).
+  Replace('__PRERELEASE__', ([bool]$Prerelease).ToString())
 
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($checkScript))
   $executable = if ($PSVersionTable.PSEdition -eq 'Core') {
@@ -393,14 +535,16 @@ Import-PwshProfileModules
 Set-PwshProfileReadLine
 Register-PwshProfileAzureCompletion
 Initialize-PwshProfilePrompt
+$profileSettings = Get-PwshProfile
 Start-PwshProfileUpdateCheck `
   -StorePath $script:PwshProfileStorePath `
   -Repository $script:PwshProfileRepository `
-  -CurrentVersion $script:PwshProfileVersion
+  -CurrentVersion $script:PwshProfileVersion `
+  -Prerelease:$profileSettings.EnablePreReleaseUpdate
 
 Remove-Item Function:Import-PwshProfileModules -ErrorAction Ignore
 Remove-Item Function:Set-PwshProfileReadLine -ErrorAction Ignore
 Remove-Item Function:Register-PwshProfileAzureCompletion -ErrorAction Ignore
 Remove-Item Function:Initialize-PwshProfilePrompt -ErrorAction Ignore
 Remove-Item Function:Start-PwshProfileUpdateCheck -ErrorAction Ignore
-Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath -Scope Script -ErrorAction Ignore
+Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath, profileSettings -Scope Script -ErrorAction Ignore

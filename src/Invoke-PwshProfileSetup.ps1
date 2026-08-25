@@ -887,6 +887,7 @@ function Get-WingetPackageDefinitions {
     [pscustomobject]@{ Id = 'FireDaemon.OpenSSL'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Git.Git'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'GitHub.cli'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'GitHub.Copilot'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Helm.Helm'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }

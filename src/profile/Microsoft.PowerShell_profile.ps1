@@ -35,4 +35,9 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
 
 # Clears the 'Loading personal and system profiles...' noise and forces a fresh draw, so the themed
 # prompt renders correctly on the very first line instead of a plain one until the first keypress.
-Clear-Host
+# Skipped right after the setup script's reload so its install log stays visible.
+if ($env:PwshProfileReloadInProgress) {
+  Remove-Item -LiteralPath Env:\PwshProfileReloadInProgress -ErrorAction SilentlyContinue
+} else {
+  Clear-Host
+}

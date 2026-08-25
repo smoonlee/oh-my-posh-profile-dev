@@ -1765,6 +1765,9 @@ function Invoke-PowerShellModuleConfiguration {
       Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the session so the updated profile takes effect...'
       Write-Host ''
 
+      # Tells the new session's profile to skip Clear-Host, so this install log stays visible.
+      $env:PwshProfileReloadInProgress = '1'
+
       # https://stackoverflow.com/questions/11546069/refreshing-restarting-powershell-session-w-out-exiting
       Get-Process -Id $PID | Select-Object -ExpandProperty Path | ForEach-Object { Invoke-Command { & "$_" } -NoNewScope }
     } catch {

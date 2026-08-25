@@ -106,7 +106,12 @@
       }
     }
   }
-}
+}════════════════════════════════════════════════════════════════
+Pwsh Profile Installer
+Local Profile Store (OTA Update Baseline)
+════════════════════════════════════════════════════════════════
+
+[Store ] Theme already up to date: C:\Users\Simon\AppData\Roaming\PwshProfile\themes\quick-term-cloud.omp.json
 
 # Oh My Posh Configuration
 if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {

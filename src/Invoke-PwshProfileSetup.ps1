@@ -1622,24 +1622,15 @@ function Invoke-PowerShellModuleConfiguration {
 
   $currentProfilePath = $PROFILE.CurrentUserCurrentHost
   if (Test-Path -LiteralPath $currentProfilePath -PathType Leaf) {
-    Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the current session profile...'
     try {
-      # Tells the profile to skip its prompt-repaint step, which would otherwise overwrite this script's own output line
-      $env:PwshProfileReloadInProgress = '1'
-      . $currentProfilePath
-
-      # Dot-sourcing here only redefines 'prompt' in this function's local scope; without
-      # promoting it, the interactive session's real prompt never changes and the old one
-      # silently remains in place once this function returns.
-      if (Test-Path -LiteralPath Function:\prompt) {
-        Set-Item -Path Function:\global:prompt -Value (Get-Item -LiteralPath Function:\prompt).ScriptBlock
-      }
-
-      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Session profile reloaded.'
+      # Dot-sourcing the profile here only redefines things like 'prompt' in this function's local
+      # scope, not the true interactive global scope, so the live session never actually picks it up.
+      # Starting a fresh nested session is the only reliable way to load the updated profile immediately.
+      $currentExecutable = (Get-Process -Id $PID).Path
+      Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Starting a new session so the updated profile takes effect. Type ''exit'' to return here.'
+      & $currentExecutable -NoLogo
     } catch {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not reload the session profile: $($_.Exception.Message). Restart the shell to pick up the changes."
-    } finally {
-      Remove-Item -LiteralPath Env:\PwshProfileReloadInProgress -ErrorAction SilentlyContinue
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not start a new session: $($_.Exception.Message). Restart the shell to pick up the changes."
     }
   }
 }

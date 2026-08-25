@@ -98,3 +98,26 @@ opens dependency update pull requests, and assigns them to `@smoonlee`.
 
 To regenerate locally, run `scripts/Update-NerdFontsCatalog.ps1` from the repository
 root.
+
+## PowerShell profile configuration
+
+After the Winget phase, the script deploys `src/profile/Microsoft.PowerShell_profile.ps1`
+to the current user's PowerShell profile (`$PROFILE.CurrentUserCurrentHost`), which
+loads the repository's `quick-term-cloud.omp.json` theme via `oh-my-posh init`.
+
+- If no profile file exists yet, it's created (creating the parent directory if
+	needed).
+- If a profile file already exists and differs from the repository version, the
+	script warns and prompts for confirmation before overwriting. A timestamped
+	backup (for example `Microsoft.PowerShell_profile.ps1.20260825140530.bak`) is
+	created first.
+- If the existing profile already matches, nothing is changed.
+
+Run just this phase with:
+
+```powershell
+.\Invoke-PwshProfileSetup.ps1 -RunPhase Profile
+```
+
+> The theme is currently referenced from the `main` branch's raw URL. This will
+> move to a versioned GitHub release asset once a release is published.

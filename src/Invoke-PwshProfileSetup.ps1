@@ -82,7 +82,7 @@ param (
   # END GENERATED NERD FONT VALIDATESET
 
   ,
-  [ValidateSet('All', 'NerdFont', 'Winget')]
+  [ValidateSet('All', 'NerdFont', 'Winget', 'Profile')]
   [string] $RunPhase = 'All'
 )
 
@@ -1113,6 +1113,55 @@ function Invoke-WingetConfiguration {
   }
 }
 
+function Install-PwshProfileConfiguration {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $RepoProfilePath
+  )
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Profile Configuration'
+
+  if (-not (Test-Path -LiteralPath $RepoProfilePath -PathType Leaf)) {
+    throw "The repository profile template was not found at '$RepoProfilePath'."
+  }
+
+  $profilePath = $PROFILE.CurrentUserCurrentHost
+  Write-PwshProfileStatus -Stage 'Profile' -Message "Target: $profilePath"
+
+  $newContent = Get-Content -LiteralPath $RepoProfilePath -Raw
+
+  if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
+    $existingContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction SilentlyContinue
+
+    if ($existingContent -eq $newContent) {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Already up to date.'
+      return
+    }
+
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'An existing PowerShell profile was found and would be overwritten.'
+    $confirmation = Read-Host -Prompt "Overwrite '$profilePath'? A backup will be created first. (y/N)"
+    if ($confirmation -notmatch '(?i)^y(es)?$') {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Skipped: user declined to overwrite the existing profile.'
+      return
+    }
+
+    $backupTimestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss')
+    $backupPath = "$profilePath.$backupTimestamp.bak"
+    Copy-Item -LiteralPath $profilePath -Destination $backupPath -Force
+    Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Backup: $backupPath"
+  }
+  else {
+    $profileDirectory = Split-Path -Path $profilePath -Parent
+    if (-not (Test-Path -LiteralPath $profileDirectory)) {
+      New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+    }
+  }
+
+  Copy-Item -LiteralPath $RepoProfilePath -Destination $profilePath -Force
+  Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Installed: $profilePath"
+}
+
 $nerdFontsCatalogUri = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/NerdFontsCatalog.json'
 $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
 $nerdFontsVersion = $null
@@ -1199,4 +1248,8 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
 
 if ($RunPhase -in @('All', 'Winget')) {
   Invoke-WingetConfiguration -ScriptPath $PSCommandPath -NerdFontName $nerdFontName
+}
+
+if ($RunPhase -in @('All', 'Profile')) {
+  Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
 }

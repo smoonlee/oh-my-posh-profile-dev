@@ -186,12 +186,8 @@ function Start-PwshProfileElevated {
     [Parameter(Mandatory)]
     [string] $ScriptPath,
 
-    [string] $NerdFontName,
-
-    [ValidateSet('NerdFont', 'Winget')]
-    [string] $RunPhase,
-
-    [string] $Purpose = 'configuration'
+    [Parameter(Mandatory)]
+    [string] $NerdFontName
   )
 
   if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -206,14 +202,8 @@ function Start-PwshProfileElevated {
   }
 
   $escapedScriptPath = $ScriptPath.Replace("'", "''")
-  $command = "& '$escapedScriptPath'"
-  if ($NerdFontName) {
-    $escapedFontName = $NerdFontName.Replace("'", "''")
-    $command = "$command -NerdFontName '$escapedFontName'"
-  }
-  if ($RunPhase) {
-    $command = "$command -RunPhase '$RunPhase'"
-  }
+  $escapedFontName = $NerdFontName.Replace("'", "''")
+  $command = "& '$escapedScriptPath' -NerdFontName '$escapedFontName' -RunPhase 'NerdFont'"
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
   $arguments = @(
     '-NoProfile',
@@ -223,7 +213,7 @@ function Start-PwshProfileElevated {
 
   $sudoConfiguration = Get-WindowsSudoConsoleMode
   if ($sudoConfiguration -and $sudoConfiguration.Mode -eq 'CurrentConsole') {
-    Write-PwshProfileStatus -Stage 'Admin' -Type Action -Message "Approve the UAC prompt; $Purpose will continue in this terminal."
+    Write-PwshProfileStatus -Stage 'Admin' -Type Action -Message 'Approve the UAC prompt; Nerd Font installation will continue in this terminal.'
     & $sudoConfiguration.Command $pwsh.Source @arguments
     if ($LASTEXITCODE -ne 0) {
       throw "The Administrator PowerShell session exited with code $LASTEXITCODE."
@@ -232,7 +222,7 @@ function Start-PwshProfileElevated {
     return
   }
 
-  Write-PwshProfileStatus -Stage 'Admin' -Type Action -Message "Approve the UAC prompt; $Purpose will continue in a separate PowerShell window."
+  Write-PwshProfileStatus -Stage 'Admin' -Type Action -Message 'Approve the UAC prompt; Nerd Font installation will continue in a separate PowerShell window.'
   if (-not $sudoConfiguration) {
     Write-Verbose 'For same-terminal elevation, enable Windows sudo in Inline or Input closed mode.'
   }
@@ -765,13 +755,13 @@ function Update-WindowsTerminalFontFace {
     }
 
     if ($settings.profiles.list) {
-      foreach ($profile in @($settings.profiles.list)) {
-        if ($profile.font -and $profile.font.face -and $profile.font.face -ne $FontFace) {
-          $profile.font.face = $FontFace
+      foreach ($terminalProfile in @($settings.profiles.list)) {
+        if ($terminalProfile.font -and $terminalProfile.font.face -and $terminalProfile.font.face -ne $FontFace) {
+          $terminalProfile.font.face = $FontFace
           $changed = $true
         }
-        if ($profile.font -and $profile.font.size -and $profile.font.size -ne $FontSize) {
-          $profile.font.size = $FontSize
+        if ($terminalProfile.font -and $terminalProfile.font.size -and $terminalProfile.font.size -ne $FontSize) {
+          $terminalProfile.font.size = $FontSize
           $changed = $true
         }
       }
@@ -893,16 +883,16 @@ function Get-WingetPackageDefinitions {
   param ()
 
   @(
-    [pscustomobject]@{ Id = 'Amazon.AWSCLI'; Name = 'AWS CLI'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Git.Git'; Name = 'Git'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'GitHub.cli'; Name = 'GitHub CLI'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Name = 'Terraform'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Helm.Helm'; Name = 'Helm'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Name = 'Oh My Posh'; Scope = 'user' }
-    [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Name = 'kubectl'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Name = 'Azure Kubelogin'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Name = 'Azure CLI'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Name = 'Speedtest CLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Amazon.AWSCLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Git.Git'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'GitHub.cli'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Helm.Helm'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }
+    [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Scope = 'machine' }
   )
 }
 
@@ -940,7 +930,7 @@ function Update-WingetClient {
     }
     $currentVersion = [version]($currentVersionText.Trim().TrimStart('v'))
 
-    $release = Invoke-WithRetry -Description 'Check latest winget release' -ScriptBlock {
+    $release = Invoke-WithRetry -Stage 'Winget' -Description 'Check latest winget release' -ScriptBlock {
       Get-LatestWingetRelease
     }
     $latestVersion = [version]($release.tag_name.TrimStart('v'))
@@ -962,7 +952,7 @@ function Update-WingetClient {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
     try {
       $bundlePath = Join-Path $tempRoot $bundleAsset.name
-      Invoke-WithRetry -Description 'Download winget package' -ScriptBlock {
+      Invoke-WithRetry -Stage 'Winget' -Description 'Download winget package' -ScriptBlock {
         Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $bundlePath -UseBasicParsing -ErrorAction Stop
       }
 
@@ -1000,34 +990,6 @@ function Update-WingetSources {
 
   Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message 'Sources updated.'
   Write-Host ''
-}
-
-function Test-WingetPackageInstalled {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [string] $PackageId,
-
-    [Parameter(Mandatory)]
-    [string] $WingetPath
-  )
-
-  $output = & $WingetPath list --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null | Out-String
-  $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($PackageId)
-}
-
-function Test-WingetPackageUpgradeAvailable {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [string] $PackageId,
-
-    [Parameter(Mandatory)]
-    [string] $WingetPath
-  )
-
-  $output = & $WingetPath upgrade --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null | Out-String
-  $LASTEXITCODE -eq 0 -and $output -match [regex]::Escape($PackageId)
 }
 
 function ConvertFrom-WingetTableRow {
@@ -1101,7 +1063,8 @@ function Get-WingetPackageVersionInfo {
     }
 
     # Winget emits ANSI colour codes even when output is redirected; strip them before column parsing.
-    $plainLines = $output | ForEach-Object { $_ -replace "`e\[[0-9;]*[a-zA-Z]", '' }
+    $ansiEscapePattern = '{0}\[[0-9;]*[a-zA-Z]' -f [char]27
+    $plainLines = $output | ForEach-Object { $_ -replace $ansiEscapePattern, '' }
     ConvertFrom-WingetTableRow -Lines $plainLines -PackageId $PackageId
   } catch {
     $null
@@ -1224,7 +1187,7 @@ function Invoke-WingetConfiguration {
     foreach ($package in $packages) {
       [pscustomobject]@{
         Package = $package
-        Installed = Test-WingetPackageInstalled -PackageId $package.Id -WingetPath $wingetPath
+        InstalledInfo = Get-WingetPackageVersionInfo -PackageId $package.Id -WingetPath $wingetPath -Command list
       }
     }
   )
@@ -1237,12 +1200,11 @@ function Invoke-WingetConfiguration {
 
   foreach ($state in $packageStates) {
     try {
-      if ($state.Installed) {
-        $installedInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command list
-        $installedVersion = if ($installedInfo -and $installedInfo.Version) { $installedInfo.Version } else { 'unknown version' }
+      if ($state.InstalledInfo) {
+        $installedVersion = if ($state.InstalledInfo.Version) { $state.InstalledInfo.Version } else { 'unknown version' }
+        $upgradeInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command upgrade
 
-        if (Test-WingetPackageUpgradeAvailable -PackageId $state.Package.Id -WingetPath $wingetPath) {
-          $upgradeInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command upgrade
+        if ($upgradeInfo) {
           $latestVersion = if ($upgradeInfo -and $upgradeInfo.Available) { $upgradeInfo.Available } else { 'a newer version' }
           Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message "$($state.Package.Id) installed $installedVersion, updating to $latestVersion [$($state.Package.Scope)]"
           Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
@@ -1270,15 +1232,15 @@ function Get-PowerShellModuleDefinitions {
   param ()
 
   @(
-    [pscustomobject]@{ Name = 'Az'; Scope = 'CurrentUser'; Notes = 'Azure PowerShell meta module' }
-    [pscustomobject]@{ Name = 'Microsoft.Graph'; Scope = 'CurrentUser'; Notes = 'Microsoft Graph PowerShell meta module' }
-    [pscustomobject]@{ Name = 'PackageManagement'; Scope = 'CurrentUser'; Notes = 'Package provider management' }
-    [pscustomobject]@{ Name = 'Pester'; Scope = 'CurrentUser'; Notes = 'PowerShell testing framework' }
-    [pscustomobject]@{ Name = 'PowerShellGet'; Scope = 'CurrentUser'; Notes = 'PowerShell Gallery tooling' }
-    [pscustomobject]@{ Name = 'PSReadLine'; Scope = 'CurrentUser'; Notes = 'Command-line editing' }
-    [pscustomobject]@{ Name = 'PSRule'; Scope = 'CurrentUser'; Notes = 'Rule engine' }
-    [pscustomobject]@{ Name = 'PSRule.Rules.Azure'; Scope = 'CurrentUser'; Notes = 'Azure rules for PSRule' }
-    [pscustomobject]@{ Name = 'Terminal-Icons'; Scope = 'CurrentUser'; Notes = 'Terminal file icons' }
+    [pscustomobject]@{ Name = 'Az'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'Microsoft.Graph'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'PackageManagement'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'Pester'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'PowerShellGet'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'PSReadLine'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'PSRule'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'PSRule.Rules.Azure'; Scope = 'CurrentUser' }
+    [pscustomobject]@{ Name = 'Terminal-Icons'; Scope = 'CurrentUser' }
   )
 }
 
@@ -1332,6 +1294,9 @@ function Invoke-WithRetry {
     [Parameter(Mandatory)]
     [string] $Description,
 
+    [ValidateSet('Modules', 'Winget')]
+    [string] $Stage = 'Modules',
+
     [int] $MaxAttempts = 3,
 
     [int] $DelaySeconds = 5
@@ -1344,7 +1309,7 @@ function Invoke-WithRetry {
       if ($attempt -eq $MaxAttempts) {
         throw "'$Description' failed after $MaxAttempts attempts. $($_.Exception.Message)"
       }
-      Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "$Description failed ($attempt/$MaxAttempts); retrying in ${DelaySeconds}s..."
+      Write-PwshProfileStatus -Stage $Stage -Type Warning -Message "$Description failed ($attempt/$MaxAttempts); retrying in ${DelaySeconds}s..."
       Start-Sleep -Seconds $DelaySeconds
     }
   }
@@ -1466,8 +1431,11 @@ function Invoke-PowerShellModuleAction {
     # specially, and can end up saved somewhere our disk scan never finds even with an explicit
     # -Path. Track our own record of the last version we successfully saved (like the Nerd Font
     # registry state) so detection doesn't depend solely on locating the files afterward.
+    $isBootstrapModule = $Module.Name -in @('PackageManagement', 'PowerShellGet', 'PSReadLine')
     $diskModule = Get-InstalledPowerShellModules -Name $Module.Name | Select-Object -First 1
-    $trackedVersion = Get-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name
+    $trackedVersion = if ($isBootstrapModule) {
+      Get-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name
+    }
     $installedVersion = @($diskModule.Version, $trackedVersion) |
       Where-Object { $_ } |
       Sort-Object -Descending |
@@ -1508,7 +1476,9 @@ function Invoke-PowerShellModuleAction {
       $ProgressPreference = $previousProgressPreference
     }
 
-    Set-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name -Version $latestVersion
+    if ($isBootstrapModule) {
+      Set-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name -Version $latestVersion
+    }
     Remove-OldPowerShellModuleVersions -Name $Module.Name
     Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) ready at $latestVersion [$($Module.Scope)]"
     return 'Updated'
@@ -1602,11 +1572,17 @@ function Install-PwshProfileConfiguration {
     return
   }
 
-  $profilePath = $PROFILE.CurrentUserCurrentHost
+  $supportPaths = Get-CrossPlatformSupportPaths
+  $profilePath = Join-Path $supportPaths.SourceRoot 'Microsoft.PowerShell_profile.ps1'
   Write-PwshProfileStatus -Stage 'Profile' -Message "Target: $profilePath"
 
   if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
-    $existingContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction SilentlyContinue
+    try {
+      $existingContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction Stop
+    } catch {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not read the existing profile; leaving it as-is. $($_.Exception.Message)"
+      return
+    }
 
     if ($existingContent -eq $remoteFile.Content) {
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Already up to date.'
@@ -1638,7 +1614,11 @@ function Install-PwshProfileConfiguration {
     }
   }
 
-  Set-Content -LiteralPath $profilePath -Value $remoteFile.Content -NoNewline -Encoding UTF8
+  [System.IO.File]::WriteAllText(
+    [System.IO.Path]::GetFullPath($profilePath),
+    $remoteFile.Content,
+    [System.Text.UTF8Encoding]::new($false)
+  )
   if ($remoteFile.LastModified) {
     (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
   }
@@ -1687,27 +1667,27 @@ function Install-PwshProfileLocalStore {
   $themeFileName = Split-Path -Path $ThemeRawUri.AbsolutePath -Leaf
   $themeDestination = Join-Path $paths.Themes $themeFileName
   $remoteHash = Get-StringSHA256 -Value $remoteFile.Content
+  $themeIsCurrent = $false
 
   if (Test-Path -LiteralPath $themeDestination -PathType Leaf) {
     $localHash = (Get-FileHash -LiteralPath $themeDestination -Algorithm SHA256).Hash
-    if ($localHash -eq $remoteHash) {
+    if ($localHash -ieq $remoteHash) {
       Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme already up to date: $themeDestination"
-      return
-    }
-
-    $localLastWriteTime = (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc
-    if ($remoteFile.LastModified -and $remoteFile.LastModified.UtcDateTime -le $localLastWriteTime) {
-      Write-PwshProfileStatus -Stage 'Store' -Type Success -Message 'Local theme is newer than the GitHub version; leaving it as-is.'
-      return
+      $themeIsCurrent = $true
     }
   }
 
-  # The theme is safe to auto-overwrite (unlike the .ps1 profile) since it's data, not a script the user could have edited.
-  Set-Content -LiteralPath $themeDestination -Value $remoteFile.Content -NoNewline -Encoding UTF8
-  if ($remoteFile.LastModified) {
-    (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
+  if (-not $themeIsCurrent) {
+    [System.IO.File]::WriteAllText(
+      [System.IO.Path]::GetFullPath($themeDestination),
+      $remoteFile.Content,
+      [System.Text.UTF8Encoding]::new($false)
+    )
+    if ($remoteFile.LastModified) {
+      (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
+    }
+    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme: $themeDestination"
   }
-  Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme: $themeDestination"
 
   $version = [ordered]@{
     schemaVersion = 1
@@ -1720,8 +1700,27 @@ function Install-PwshProfileLocalStore {
     }
   }
 
-  $version | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $paths.VersionFile -Encoding UTF8
-  Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Version manifest: $($paths.VersionFile)"
+  $versionJson = $version | ConvertTo-Json -Depth 5
+  $manifestIsCurrent = $false
+  if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
+    try {
+      $existingVersion = Get-Content -LiteralPath $paths.VersionFile -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+      $manifestIsCurrent = $existingVersion.schemaVersion -eq 1 -and
+      $existingVersion.theme.file -eq $themeFileName -and
+      $existingVersion.theme.sha256 -ieq $remoteHash
+    } catch {
+      $manifestIsCurrent = $false
+    }
+  }
+  if (-not $themeIsCurrent -or -not $manifestIsCurrent) {
+    [System.IO.File]::WriteAllText(
+      [System.IO.Path]::GetFullPath($paths.VersionFile),
+      "$versionJson`n",
+      [System.Text.UTF8Encoding]::new($false)
+    )
+    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Version manifest: $($paths.VersionFile)"
+  }
 }
 
 function Invoke-PowerShellModuleConfiguration {
@@ -1776,20 +1775,6 @@ function Get-CrossPlatformSupportPaths {
   }
 }
 
-function Test-PwshReparsePoint {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [string] $Path
-  )
-
-  if (-not (Test-Path -LiteralPath $Path)) {
-    return $false
-  }
-
-  [bool]((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)
-}
-
 function Set-PwshSymbolicLink {
   [CmdletBinding()]
   param (
@@ -1813,15 +1798,16 @@ function Set-PwshSymbolicLink {
       Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message "Created missing target '$Target'."
     }
 
-    if (Test-Path -LiteralPath $Path) {
-      if (Test-PwshReparsePoint -Path $Path) {
-        $existingTarget = @((Get-Item -LiteralPath $Path -Force).Target) | Select-Object -First 1
+    $existingItem = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($existingItem) {
+      if ($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        $existingTarget = @($existingItem.Target) | Select-Object -First 1
         if ($existingTarget -and $existingTarget.TrimEnd('\') -ieq $Target.TrimEnd('\')) {
           Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "'$Path' already linked to '$Target'."
           return
         }
         Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
-      } elseif ((Get-Item -LiteralPath $Path -Force).PSIsContainer) {
+      } elseif ($existingItem.PSIsContainer) {
         if (@(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue).Count -gt 0) {
           Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "'$Path' has existing content; move it into '$Target' and rerun to link safely."
           return
@@ -1919,18 +1905,11 @@ function Invoke-CrossPlatformProfileConfiguration {
   }
 }
 
-$nerdFontsCatalogUri = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/NerdFontsCatalog.json'
-$nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
-$nerdFontsVersion = $null
-$nerdFontVersion = $null
-$nerdFontArchiveName = $null
-$nerdFontInstalled = $false
-$installedNerdFontsVersion = $null
-$installedNerdFontFiles = @()
-
 if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Nerd Font Configuration'
 
+  $nerdFontsCatalogUri = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/NerdFontsCatalog.json'
+  $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
   $nerdFontsCatalog = Get-NerdFontsCatalog -RemoteUri $nerdFontsCatalogUri
   $selectedNerdFont = Resolve-NerdFont -Catalog $nerdFontsCatalog -Name $nerdFontName
 
@@ -1974,7 +1953,7 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
   else {
     Write-PwshProfileStatus -Stage 'Action' -Type Action -Message "$nerdFontName requires installation: $($installDecision.Reason)."
     if (-not (Test-PwshProfileAdministrator)) {
-      Start-PwshProfileElevated -ScriptPath $PSCommandPath -NerdFontName $nerdFontName -RunPhase 'NerdFont' -Purpose 'Nerd Font installation'
+      Start-PwshProfileElevated -ScriptPath $PSCommandPath -NerdFontName $nerdFontName
       $installedNerdFontFiles = @(
         Find-InstalledNerdFont -Font $selectedNerdFont -FontDirectories $windowsFontDirectories
       )

@@ -1,7 +1,3 @@
-<#
-
-#>
-
 # PowerShell Modules
 Import-Module -Name Terminal-Icons -ErrorAction SilentlyContinue
 

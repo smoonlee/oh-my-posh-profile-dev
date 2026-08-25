@@ -890,9 +890,12 @@ function Get-WingetPackageDefinitions {
     [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Helm.Helm'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }
+    [pscustomobject]@{ Id = 'jqlang.jq'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Microsoft.Bicep'; Scope = 'user' }
+    [pscustomobject]@{ Id = 'MikeFarah.yq'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Scope = 'machine' }
   )
 }

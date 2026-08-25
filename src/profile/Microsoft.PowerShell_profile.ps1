@@ -106,21 +106,4 @@
       }
     }
   }
-}════════════════════════════════════════════════════════════════
-Pwsh Profile Installer
-Local Profile Store (OTA Update Baseline)
-════════════════════════════════════════════════════════════════
-
-[Store ] Theme already up to date: C:\Users\Simon\AppData\Roaming\PwshProfile\themes\quick-term-cloud.omp.json
-
-# Oh My Posh Configuration
-if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
-  $pwshProfileThemePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.json'
-
-  if (-not (Test-Path -LiteralPath $pwshProfileThemePath -PathType Leaf)) {
-    $pwshProfileThemePath = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
-  }
-
-  oh-my-posh init pwsh --config $pwshProfileThemePath | Invoke-Expression
-  Remove-Variable -Name pwshProfileThemePath -ErrorAction Ignore
 }

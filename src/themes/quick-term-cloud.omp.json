@@ -21,13 +21,14 @@
     "execution-foreground": "#585858"
   },
   "var": {
-    "dividerColor": "#d75f00"
+    "dividerColor": "#d75f00",
+    "copilotDetailedWidth": 140
   },
   "blocks": [
     {
       "type": "prompt",
       "alignment": "left",
-      "newline": true,
+      "newline": false,
       "segments": [
         {
           "type": "os",
@@ -97,6 +98,7 @@
     {
       "type": "prompt",
       "alignment": "right",
+      "overflow": "hide",
       "segments": [
         {
           "type": "executiontime",
@@ -115,7 +117,7 @@
         {
           "type": "copilot",
           "alias": "copilot",
-          "min_width": 140,
+          "min_width": 100,
           "style": "powerline",
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
@@ -124,12 +126,12 @@
           "background_templates": [
             "{{ if ge .Premium.Percent 90 }}p:danger{{ else if ge .Premium.Percent 70 }}p:warning{{ end }}"
           ],
-          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}% ",
+          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }}  {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
           "options": {
             "http_timeout": 1000
           },
           "cache": {
-            "duration": "5m",
+            "duration": "1m",
             "strategy": "session"
           }
         },
@@ -207,9 +209,7 @@
           "type": "text",
           "style": "plain",
           "foreground": "p:accent",
-          "foreground_templates": [
-            "{{ if .Root }}p:danger{{ end }}"
-          ],
+          "foreground_templates": ["{{ if .Root }}p:danger{{ end }}"],
           "template": "{{ if .Root }}#{{ else }}${{ end }}"
         }
       ]

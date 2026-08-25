@@ -95,12 +95,13 @@ function Write-PwshProfileStatus {
     [Parameter(Mandatory)]
     [string] $Message,
 
-    [ValidateSet('Info', 'Action', 'Success', 'Warning')]
+    [ValidateSet('Info', 'Action', 'Current', 'Success', 'Warning')]
     [string] $Type = 'Info'
   )
 
   $color = switch ($Type) {
     'Action' { 'Cyan' }
+    'Current' { 'Gray' }
     'Success' { 'Green' }
     'Warning' { 'Yellow' }
     default { 'Gray' }
@@ -271,7 +272,7 @@ function Get-NerdFontsCatalog {
     throw 'The Nerd Fonts catalog is missing NerdFontsVersion or font entries.'
   }
 
-  Write-PwshProfileStatus -Stage 'Catalog' -Type Success -Message "Loaded $(@($catalog.Fonts).Count) fonts from release $($catalog.NerdFontsVersion)."
+  Write-PwshProfileStatus -Stage 'Catalog' -Type Current -Message "Loaded $(@($catalog.Fonts).Count) fonts from release $($catalog.NerdFontsVersion)."
 
   $catalog
 }
@@ -881,10 +882,11 @@ function Update-WindowsTerminalFontFace {
 
     if (-not $changed) {
       $statusSuffix = if ($PostInstall) { 'confirmed' } else { 'already configured' }
-      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Face: $FontFace $statusSuffix"
-      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize $statusSuffix"
-      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory $statusSuffix"
-      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell $statusSuffix"
+      $statusType = if ($PostInstall) { 'Success' } else { 'Current' }
+      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Font Face: $FontFace $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Font Size: $FontSize $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Starting Directory: $StartingDirectory $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type $statusType -Message "Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell $statusSuffix"
       continue
     }
 
@@ -1063,7 +1065,7 @@ function Update-WingetClient {
     $latestVersion = [version]($release.tag_name.TrimStart('v'))
 
     if ($currentVersion -ge $latestVersion) {
-      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Version: $currentVersion [latest]"
+      Write-PwshProfileStatus -Stage 'Winget' -Type Current -Message "Version: $currentVersion [latest]"
       return
     }
 
@@ -1336,7 +1338,7 @@ function Invoke-WingetConfiguration {
           Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
           $summary.Updated++
         } else {
-          Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) installed $installedVersion [latest] [$($state.Package.Scope)]"
+          Write-PwshProfileStatus -Stage 'Winget' -Type Current -Message "$($state.Package.Id) installed $installedVersion [latest] [$($state.Package.Scope)]"
           $summary.Current++
         }
       } else {
@@ -1350,7 +1352,8 @@ function Invoke-WingetConfiguration {
   }
 
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
+  $summaryType = if ($summary.Failed -gt 0) { 'Warning' } elseif ($summary.Updated -gt 0) { 'Success' } else { 'Current' }
+  Write-PwshProfileStatus -Stage 'Winget' -Type $summaryType -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
 }
 
 function Get-PowerShellModuleDefinitions {
@@ -1392,7 +1395,7 @@ function Initialize-PowerShellGallery {
     }
     Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'NuGet package provider installed.'
   } else {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "NuGet package provider $($nugetProvider.Version)."
+    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message "NuGet package provider $($nugetProvider.Version)."
   }
 
   Import-PackageProvider -Name NuGet -Force -ErrorAction Stop | Out-Null
@@ -1407,7 +1410,7 @@ function Initialize-PowerShellGallery {
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -WarningAction SilentlyContinue
     Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'PSGallery trusted.'
   } else {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message 'PSGallery already trusted.'
+    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message 'PSGallery already trusted.'
   }
 }
 
@@ -1573,7 +1576,7 @@ function Invoke-PowerShellModuleAction {
     $latestVersion = [version]$galleryVersion
 
     if ($installedVersion -and $installedVersion -ge $latestVersion) {
-      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "$($Module.Name) installed $installedVersion [latest] [$($Module.Scope)]"
+      Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message "$($Module.Name) installed $installedVersion [latest] [$($Module.Scope)]"
       return 'Current'
     }
 
@@ -1710,13 +1713,13 @@ function Install-PwshProfileConfiguration {
     }
 
     if ($existingContent -eq $remoteFile.Content) {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Already up to date.'
+      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message 'Already up to date.'
       return
     }
 
     $localLastWriteTime = (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc
     if ($remoteFile.LastModified -and $remoteFile.LastModified.UtcDateTime -le $localLastWriteTime) {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Local profile is newer than the GitHub version; leaving it as-is.'
+      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message 'Local profile is newer than the GitHub version; leaving it as-is.'
       return
     }
 
@@ -1797,7 +1800,7 @@ function Install-PwshProfileLocalStore {
   if (Test-Path -LiteralPath $themeDestination -PathType Leaf) {
     $localHash = (Get-FileHash -LiteralPath $themeDestination -Algorithm SHA256).Hash
     if ($localHash -ieq $remoteHash) {
-      Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme already up to date: $themeDestination"
+      Write-PwshProfileStatus -Stage 'Store' -Type Current -Message "Theme already up to date: $themeDestination"
       $themeIsCurrent = $true
     }
   }
@@ -1874,7 +1877,8 @@ function Invoke-PowerShellModuleConfiguration {
   }
 
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
+  $summaryType = if ($summary.Failed -gt 0) { 'Warning' } elseif ($summary.Updated -gt 0) { 'Success' } else { 'Current' }
+  Write-PwshProfileStatus -Stage 'Modules' -Type $summaryType -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
 
   Install-PwshProfileConfiguration -RawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/profile/Microsoft.PowerShell_profile.ps1'
   Install-PwshProfileLocalStore -ThemeRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
@@ -1928,7 +1932,7 @@ function Set-PwshSymbolicLink {
       if ($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
         $existingTarget = @($existingItem.Target) | Select-Object -First 1
         if ($existingTarget -and $existingTarget.TrimEnd('\') -ieq $Target.TrimEnd('\')) {
-          Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "'$Path' already linked to '$Target'."
+          Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message "'$Path' already linked to '$Target'."
           return
         }
         Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
@@ -1962,7 +1966,7 @@ function Set-PwshExecutionPolicy {
   try {
     $currentPolicy = Get-ExecutionPolicy -Scope CurrentUser
     if ($currentPolicy -in @('RemoteSigned', 'Unrestricted', 'Bypass')) {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy already $currentPolicy for $($PSVersionTable.PSEdition) [CurrentUser]."
+      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message "Execution policy already $currentPolicy for $($PSVersionTable.PSEdition) [CurrentUser]."
     } else {
       Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop
       Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Execution policy set to RemoteSigned for $($PSVersionTable.PSEdition) [CurrentUser]."
@@ -2067,7 +2071,7 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
     if ($installDecision.IsUntracked) {
       Write-PwshProfileStatus -Stage 'Found' -Type Warning -Message "$nerdFontName is installed; release unknown, so it was left unchanged."
     } else {
-      Write-PwshProfileStatus -Stage 'Current' -Type Success -Message "$nerdFontName at Nerd Fonts $installedNerdFontsVersion."
+      Write-PwshProfileStatus -Stage 'Current' -Type Current -Message "$nerdFontName at Nerd Fonts $installedNerdFontsVersion."
     }
     $installedNerdFontFiles | ForEach-Object {
       Write-PwshProfileStatus -Stage 'File' -Message $_.FullName

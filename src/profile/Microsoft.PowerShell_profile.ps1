@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.5'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.6'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -82,11 +82,13 @@ function global:Get-PwshProfile {
 
   $configPath = Join-Path $env:APPDATA 'PwshProfile\config\settings.json'
   $enablePreReleaseUpdate = $false
+  $enablePublicIP = $false
   if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     try {
       $settings = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop |
         ConvertFrom-Json -ErrorAction Stop
       $enablePreReleaseUpdate = [bool]$settings.enablePreReleaseUpdate
+      $enablePublicIP = [bool]$settings.enablePublicIP
     }
     catch {
       Write-Warning "Ignoring invalid Pwsh Profile settings at '$configPath'."
@@ -153,6 +155,7 @@ function global:Get-PwshProfile {
       'Unavailable'
     }
     EnablePreReleaseUpdate = $enablePreReleaseUpdate
+    EnablePublicIP = $enablePublicIP
     UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
     ConfigPath = $configPath
   }
@@ -165,21 +168,30 @@ function global:Set-PwshProfile {
     [switch] $EnableReleaseUpdate,
 
     [Parameter(ParameterSetName = 'Preview')]
-    [switch] $EnablePreReleaseUpdate
+    [switch] $EnablePreReleaseUpdate,
+
+    [Parameter(ParameterSetName = 'PublicIP')]
+    [switch] $EnablePublicIP
   )
 
   if (-not $PSBoundParameters.ContainsKey('EnableReleaseUpdate') -and
-    -not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+    -not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate') -and
+    -not $PSBoundParameters.ContainsKey('EnablePublicIP')) {
     return Get-PwshProfile
   }
 
-  $usePrerelease = if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
-    $false
+  $current = Get-PwshProfile -SettingsOnly
+  $usePrerelease = [bool]$current.EnablePreReleaseUpdate
+  $usePublicIP = [bool]$current.EnablePublicIP
+  if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
+    $usePrerelease = $false
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+    $usePrerelease = [bool]$EnablePreReleaseUpdate
   }
   else {
-    [bool]$EnablePreReleaseUpdate
+    $usePublicIP = [bool]$EnablePublicIP
   }
-  $current = Get-PwshProfile -SettingsOnly
   $configPath = $current.ConfigPath
   $configDirectory = Split-Path -Path $configPath -Parent
   if (-not (Test-Path -LiteralPath $configDirectory -PathType Container)) {
@@ -187,8 +199,9 @@ function global:Set-PwshProfile {
   }
 
   $settings = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     enablePreReleaseUpdate = $usePrerelease
+    enablePublicIP = $usePublicIP
     updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
   }
   $temporaryPath = "$configPath.$PID.tmp"
@@ -219,12 +232,18 @@ function global:Set-PwshProfile {
     Remove-Item -LiteralPath $temporaryPath, $backupPath -Force -ErrorAction Ignore
   }
 
-  # Force the newly selected channel to be checked on the next profile load.
-  Remove-Item -LiteralPath (Join-Path $env:APPDATA 'PwshProfile\update-state.json') `
-    -Force -ErrorAction Ignore
-
-  $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
-  Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
+  if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate') -or
+    $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+    # Force the newly selected channel to be checked on the next profile load.
+    Remove-Item -LiteralPath (Join-Path $env:APPDATA 'PwshProfile\update-state.json') `
+      -Force -ErrorAction Ignore
+    $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
+    Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
+  }
+  else {
+    $moduleState = if ($usePublicIP) { 'enabled' } else { 'disabled' }
+    Write-Host "Pwsh Profile PublicIP module $moduleState. Reload the profile to apply the change."
+  }
   Get-PwshProfile
 }
 
@@ -291,10 +310,31 @@ function global:Update-PwshProfile {
 
 function Import-PwshProfileModules {
   [CmdletBinding()]
-  param ()
+  param (
+    [Parameter(Mandatory)]
+    [object] $Settings
+  )
 
   foreach ($moduleName in @('PSReadLine', 'Terminal-Icons')) {
     Import-Module -Name $moduleName -Global -ErrorAction Ignore
+  }
+
+  if (-not $Settings.EnablePublicIP) {
+    Remove-Module -Name 'PwshProfile.PublicIP' -Force -ErrorAction Ignore
+    return
+  }
+
+  $modulePath = Join-Path $script:PwshProfileStorePath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+  if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+    Write-Warning "The enabled PwshProfile.PublicIP module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
+    return
+  }
+
+  try {
+    Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
+  }
+  catch {
+    Write-Warning "Could not import the enabled PwshProfile.PublicIP module. $($_.Exception.Message)"
   }
 }
 
@@ -473,7 +513,7 @@ function Start-PwshProfileUpdateCheck {
         -Right $CurrentVersion) -gt 0) {
         $latestTag = if ($state.latestTag) { [string]$state.latestTag } else { "v$($state.latestVersion)" }
         if ($Prerelease) {
-          Write-Warning "Pwsh Profile [Pre Release] Update Available: $latestTag. Run Update-PwshProfile to install it."
+          Write-Warning "Pwsh Profile [Pre Release] Update Available: $latestTag. Run Update-PwshProfile -Prerelease to install it."
         }
         else {
           Write-Warning "Pwsh Profile Update Available: $latestTag. Run Update-PwshProfile to install it."
@@ -602,11 +642,11 @@ Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
   }
 }
 
-Import-PwshProfileModules
+$profileSettings = Get-PwshProfile -SettingsOnly
+Import-PwshProfileModules -Settings $profileSettings
 Set-PwshProfileReadLine
 Register-PwshProfileAzureCompletion
 Initialize-PwshProfilePrompt
-$profileSettings = Get-PwshProfile -SettingsOnly
 Start-PwshProfileUpdateCheck `
   -StorePath $script:PwshProfileStorePath `
   -Repository $script:PwshProfileRepository `

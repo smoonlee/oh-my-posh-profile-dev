@@ -115,10 +115,10 @@ root.
 
 ## PowerShell profile configuration
 
-After the Winget phase, the script installs the profile, theme, and local updater
-from an immutable published GitHub Release. The profile is installed for the
-current user and loads the verified local `quick-term-cloud.omp.json` via
-`oh-my-posh init`.
+After the Winget phase, the script installs the profile, theme, local updater,
+and optional custom module files from an immutable published GitHub Release.
+The profile is installed for the current user and loads the verified local
+`quick-term-cloud.omp.json` via `oh-my-posh init`.
 
 - Stable releases are selected by default. Use `-Prerelease` to explicitly
   select the highest published prerelease.
@@ -144,8 +144,8 @@ To install a published prerelease for testing:
 .\Invoke-PwshProfileSetup.ps1 -RunPhase Profile -Prerelease
 ```
 
-For development, install the current working-tree profile, theme, and setup
-script without creating a commit, tag, or GitHub Release:
+For development, install the current working-tree profile, theme, setup script,
+and custom module files without creating a commit, tag, or GitHub Release:
 
 ```powershell
 .\src\Invoke-PwshProfileSetup.ps1 -LocalSource
@@ -175,9 +175,10 @@ not from the repository branch. A stable install fails closed when no stable
 release exists; it does not silently select a prerelease.
 
 This phase also creates `%APPDATA%\PwshProfile\version.json` using manifest
-schema v2. The manifest records the installed version and SHA-256 hashes of the
-profile, theme, and local updater. Existing schema v1 theme-only manifests are
-migrated the next time this phase runs.
+schema v2. The manifest records the installed version and SHA-256 hashes of all
+five runtime assets: profile, theme, local updater, PublicIP module manifest,
+and PublicIP module script. Existing schema v1 theme-only manifests are migrated
+the next time this phase runs.
 
 ### Profile versions and OTA updates
 
@@ -211,7 +212,7 @@ reload launches a fresh hidden check. If a newer prerelease exists, a subsequent
 start or reload displays:
 
 ```text
-WARNING: Pwsh Profile [Pre Release] Update Available: <tag>. Run Update-PwshProfile to install it.
+WARNING: Pwsh Profile [Pre Release] Update Available: <tag>. Run Update-PwshProfile -Prerelease to install it.
 ```
 
 Return to stable-only checks explicitly with:
@@ -222,6 +223,29 @@ Set-PwshProfile -EnableReleaseUpdate
 
 `Set-PwshProfile -EnablePreReleaseUpdate:$false` remains supported for scripts
 that used the original disable form.
+
+### Optional profile modules
+
+Custom functions live under `src/modules` and are installed as tracked profile
+assets. They are disabled by default and load only when enabled through
+`Set-PwshProfile`.
+
+Enable the sample PublicIP module and reload the profile:
+
+```powershell
+Set-PwshProfile -EnablePublicIP
+. $PROFILE
+Get-PublicIP
+```
+
+`Get-PublicIP` queries ipinfo.io over HTTPS with a three-second default timeout
+and returns a reusable object containing `Public IP`, `Host Name`, `ISP`, `City`,
+`Region`, and `Country`. For explicit list formatting, run
+`Get-PublicIP | Format-List`. Disable the module with:
+
+```powershell
+Set-PwshProfile -EnablePublicIP:$false
+```
 
 #### Future settings candidates
 
@@ -239,11 +263,13 @@ These ideas are not implemented yet, but fit naturally under
 
 1. Reads the latest stable SemVer 2.0 GitHub Release and its
   `PwshProfile.release.json` manifest.
-2. Compares all installed files with their schema v2 baseline and refuses the
-  update if the profile, theme, or updater was locally modified or removed.
-3. Downloads the three installed assets beside their destinations, verifies every SHA-256
-  hash, parses both PowerShell files, validates the theme JSON, and confirms the
-  profile's embedded version.
+2. Compares all previously tracked files with their schema v2 baseline and
+  refuses the update if any were locally modified or removed. Newly introduced
+  release assets have no prior local baseline and are verified before installation.
+3. Downloads the five runtime assets beside their destinations, verifies every
+  SHA-256 hash, parses the PowerShell profile, setup script, and module script,
+  validates the theme JSON and module manifest, and confirms the profile's
+  embedded version.
 4. Replaces the files atomically while retaining timestamped backups. If any
   replacement or final manifest write fails, the previous files are restored.
 5. Writes `version.json` last and asks you to open a new PowerShell session.
@@ -272,11 +298,11 @@ published. Before creating a release:
 3. Publish the GitHub Release for that tag. GitHub's **Set as a pre-release**
   setting must match whether the SemVer value contains a prerelease component.
 
-The workflow validates the tag and embedded version, parses the profile, theme,
-and Nerd Fonts catalog, computes SHA-256 hashes from the tagged files, generates
-`PwshProfile.release.json`, and uploads the profile, theme, setup script, Nerd
-Fonts catalog, and manifest as release assets. It does not overwrite an existing
-release asset.
+The workflow validates the tag and embedded version; parses the profile, setup
+script, module script, theme, module manifest, and Nerd Fonts catalog; computes
+SHA-256 hashes from the tagged files; generates `PwshProfile.release.json`; and
+uploads all seven release assets. It does not overwrite an existing release
+asset.
 Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Dynamic prompt updates

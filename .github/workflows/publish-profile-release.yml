@@ -41,6 +41,8 @@ jobs:
           $profilePath = './src/profile/Microsoft.PowerShell_profile.ps1'
           $themePath = './src/themes/quick-term-cloud.omp.json'
           $setupPath = './src/Invoke-PwshProfileSetup.ps1'
+          $publicIPManifestPath = './src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psd1'
+          $publicIPScriptPath = './src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psm1'
           $catalogPath = './NerdFontsCatalog.json'
           $changelogPath = './CHANGELOG.md'
           $profileContent = Get-Content -LiteralPath $profilePath -Raw
@@ -59,7 +61,7 @@ jobs:
           if (-not $catalog.NerdFontsVersion -or @($catalog.Fonts).Count -eq 0) {
             throw 'NerdFontsCatalog.json is missing NerdFontsVersion or font entries.'
           }
-          foreach ($scriptPath in @($profilePath, $setupPath)) {
+          foreach ($scriptPath in @($profilePath, $setupPath, $publicIPScriptPath)) {
             $tokens = $null
             $parseErrors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile(
@@ -71,6 +73,7 @@ jobs:
               throw "$scriptPath failed syntax validation: $($parseErrors.Message -join '; ')"
             }
           }
+          $null = Import-PowerShellDataFile -LiteralPath $publicIPManifestPath -ErrorAction Stop
 
           $assetRoot = Join-Path $env:RUNNER_TEMP 'pwsh-profile-release'
           New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
@@ -86,6 +89,14 @@ jobs:
             setup = [ordered]@{
               asset = 'Invoke-PwshProfileSetup.ps1'
               source = 'src/Invoke-PwshProfileSetup.ps1'
+            }
+            publicIPManifest = [ordered]@{
+              asset = 'PwshProfile.PublicIP.psd1'
+              source = 'src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psd1'
+            }
+            publicIPScript = [ordered]@{
+              asset = 'PwshProfile.PublicIP.psm1'
+              source = 'src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psm1'
             }
             catalog = [ordered]@{
               asset = 'NerdFontsCatalog.json'
@@ -124,5 +135,7 @@ jobs:
             (Join-Path $env:assetRoot 'Microsoft.PowerShell_profile.ps1') `
             (Join-Path $env:assetRoot 'quick-term-cloud.omp.json') `
             (Join-Path $env:assetRoot 'Invoke-PwshProfileSetup.ps1') `
+            (Join-Path $env:assetRoot 'PwshProfile.PublicIP.psd1') `
+            (Join-Path $env:assetRoot 'PwshProfile.PublicIP.psm1') `
             (Join-Path $env:assetRoot 'NerdFontsCatalog.json') `
             (Join-Path $env:assetRoot 'PwshProfile.release.json')

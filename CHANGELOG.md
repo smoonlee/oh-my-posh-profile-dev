@@ -7,6 +7,27 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.6] - 2026-08-26
+
+### Update guidance
+
+- Show `Update-PwshProfile -Prerelease` in prerelease update notifications while
+  stable notifications continue to show `Update-PwshProfile`.
+- Add a blank line after completed profile installation and update sections.
+
+### Optional profile modules
+
+- Add a disabled-by-default `PwshProfile.PublicIP` sample module that exports
+  `Get-PublicIP`, returns IP, hostname, ISP, and location details from ipinfo.io,
+  and can be enabled through `Set-PwshProfile`.
+- Persist the PublicIP toggle without changing the selected Stable or Preview
+  OTA channel when either setting is updated.
+- Install and verify custom module files as part of the local and immutable
+  release asset bundles.
+- Extend OTA drift checks, atomic installation, rollback, and the local version
+  baseline from three runtime assets to five while allowing a newer release to
+  introduce newly tracked assets safely.
+
 ## [4.0.0-pre-release-0.5] - 2026-08-26
 
 ### Profile status
@@ -45,7 +66,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Enforce the managed profile order while preserving unrelated profiles and
   remapping settings references to retained standard GUIDs.
 
-### Release sourcing
+### Release lookup errors
 
 - Catch and rewrap GitHub Release lookup failures (including a 404 for "no
   releases published") instead of leaking the raw HTTP exception.
@@ -54,7 +75,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [4.0.0-pre-release-0.2] - 2026-08-25
 
-### Release sourcing
+### Immutable release sourcing
 
 - Install initial profile configurations only from verified stable or explicitly
   selected prerelease assets; treat `main` as development-only.
@@ -107,7 +128,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.5...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.6...HEAD
+[4.0.0-pre-release-0.6]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.5...v4.0.0-pre-release-0.6
 [4.0.0-pre-release-0.5]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.4...v4.0.0-pre-release-0.5
 [4.0.0-pre-release-0.4]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.3...v4.0.0-pre-release-0.4
 [4.0.0-pre-release-0.3]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.2...v4.0.0-pre-release-0.3

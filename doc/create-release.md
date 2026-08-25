@@ -11,7 +11,7 @@ alone does not run `.github/workflows/publish-profile-release.yml`.
 3. Commit the release changes and push `main`.
 4. Create an annotated tag on that exact commit and push the tag.
 5. Publish a GitHub Release for the tag.
-6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all five
+6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all seven
    release assets.
 
 If changes go through a pull request, merge the PR first, update local `main`
@@ -63,6 +63,8 @@ A successful release contains:
 - `Microsoft.PowerShell_profile.ps1`
 - `quick-term-cloud.omp.json`
 - `Invoke-PwshProfileSetup.ps1`
+- `PwshProfile.PublicIP.psd1`
+- `PwshProfile.PublicIP.psm1`
 - `NerdFontsCatalog.json`
 - `PwshProfile.release.json`
 
@@ -72,7 +74,8 @@ The workflow rejects a release when:
 - the tag and embedded profile version differ;
 - the GitHub prerelease setting does not match the SemVer prerelease component;
 - `CHANGELOG.md` has no matching version section;
-- either PowerShell script fails parsing;
+- any PowerShell script or module fails parsing;
+- the PublicIP module manifest is invalid;
 - the theme is invalid JSON; or
 - an immutable release asset with the same name already exists.
 

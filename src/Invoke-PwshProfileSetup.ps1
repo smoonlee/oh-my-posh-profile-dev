@@ -2010,6 +2010,7 @@ function Get-PwshProfileLocalStorePaths {
     Root = $root
     Themes = Join-Path $root 'themes'
     Functions = Join-Path $root 'functions'
+    Modules = Join-Path $root 'modules'
     Config = Join-Path $root 'config'
     VersionFile = Join-Path $root 'version.json'
   }
@@ -2172,6 +2173,8 @@ function Install-PwshProfileLocalSource {
     profile = Join-Path $sourceRootPath 'profile\Microsoft.PowerShell_profile.ps1'
     theme = Join-Path $sourceRootPath 'themes\quick-term-cloud.omp.json'
     setup = Join-Path $sourceRootPath 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+    publicIPScript = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
   }
   foreach ($name in $sourcePaths.Keys) {
     if (-not (Test-Path -LiteralPath $sourcePaths[$name] -PathType Leaf)) {
@@ -2181,7 +2184,7 @@ function Install-PwshProfileLocalSource {
   }
 
   $paths = Get-PwshProfileLocalStorePaths
-  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
+  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Modules, $paths.Config)) {
     if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
       New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
     }
@@ -2190,6 +2193,8 @@ function Install-PwshProfileLocalSource {
     profile = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
     theme = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
     setup = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+    publicIPScript = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
   }
 
   Write-PwshProfileStatus -Stage $operation -Type Warning -Message 'Development mode: release metadata and remote asset verification are intentionally bypassed.'
@@ -2199,6 +2204,8 @@ function Install-PwshProfileLocalSource {
   try {
     Test-PwshProfileScriptFile -Path $sourcePaths.profile -Label 'Local profile'
     Test-PwshProfileScriptFile -Path $sourcePaths.setup -Label 'Local setup script'
+    Test-PwshProfileScriptFile -Path $sourcePaths.publicIPScript -Label 'Local PublicIP module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.publicIPManifest -ErrorAction Stop
     $null = Get-Content -LiteralPath $sourcePaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $sourcePaths.profile -Raw -ErrorAction Stop
@@ -2216,6 +2223,8 @@ function Install-PwshProfileLocalSource {
     profile = 'Microsoft.PowerShell_profile.ps1'
     theme = 'quick-term-cloud.omp.json'
     setup = 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest = 'PwshProfile.PublicIP.psd1'
+    publicIPScript = 'PwshProfile.PublicIP.psm1'
   }
   $artifactHashes = [ordered]@{}
   foreach ($name in $artifactNames.Keys) {
@@ -2323,6 +2332,7 @@ function Install-PwshProfileLocalSource {
   if (-not $Bootstrap) {
     Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Open a new PowerShell session to load the updated profile.'
   }
+  Write-Host ''
   return $true
 }
 
@@ -2346,7 +2356,7 @@ function Invoke-PwshProfileUpdate {
   Write-PwshProfileHeader -Title "Pwsh Profile $operation" -Subtitle 'Verified GitHub Release Assets'
 
   $paths = Get-PwshProfileLocalStorePaths
-  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
+  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Modules, $paths.Config)) {
     if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
       New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
     }
@@ -2354,10 +2364,14 @@ function Invoke-PwshProfileUpdate {
   $profilePath = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
   $themePath = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
   $setupPath = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
+  $publicIPManifestPath = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+  $publicIPScriptPath = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
   $destinations = [ordered]@{
     profile = $profilePath
     theme = $themePath
     setup = $setupPath
+    publicIPManifest = $publicIPManifestPath
+    publicIPScript = $publicIPScriptPath
   }
 
   $installed = $null
@@ -2436,8 +2450,14 @@ function Invoke-PwshProfileUpdate {
   $drift = [System.Collections.Generic.List[string]]::new()
   if ($installed) {
     foreach ($name in $destinations.Keys) {
+      $installedArtifact = $installed.artifacts.PSObject.Properties[$name]
+      if (-not $installedArtifact) {
+        # A newer release may introduce an asset that was not part of the
+        # installed baseline. It has no local state to verify yet.
+        continue
+      }
       $path = $destinations[$name]
-      $expectedHash = [string]$installed.artifacts.$name.sha256
+      $expectedHash = [string]$installedArtifact.Value.sha256
       if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         $drift.Add("$name is missing: $path")
         continue
@@ -2497,6 +2517,8 @@ function Invoke-PwshProfileUpdate {
     profile = 'Microsoft.PowerShell_profile.ps1'
     theme = 'quick-term-cloud.omp.json'
     setup = 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest = 'PwshProfile.PublicIP.psd1'
+    publicIPScript = 'PwshProfile.PublicIP.psm1'
   }
   $stagedPaths = @{}
   try {
@@ -2526,6 +2548,8 @@ function Invoke-PwshProfileUpdate {
 
     Test-PwshProfileScriptFile -Path $stagedPaths.profile -Label 'Profile'
     Test-PwshProfileScriptFile -Path $stagedPaths.setup -Label 'Setup script'
+    Test-PwshProfileScriptFile -Path $stagedPaths.publicIPScript -Label 'PublicIP module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.publicIPManifest -ErrorAction Stop
     $null = Get-Content -LiteralPath $stagedPaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $stagedPaths.profile -Raw -ErrorAction Stop
@@ -2652,6 +2676,7 @@ function Invoke-PwshProfileUpdate {
   if (-not $Bootstrap) {
     Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Open a new PowerShell session to load the updated profile.'
   }
+  Write-Host ''
   return $true
 }
 

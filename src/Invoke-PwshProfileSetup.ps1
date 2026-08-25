@@ -1619,6 +1619,17 @@ function Invoke-PowerShellModuleConfiguration {
 
   Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
   Invoke-CrossPlatformProfileConfiguration
+
+  $currentProfilePath = $PROFILE.CurrentUserCurrentHost
+  if (Test-Path -LiteralPath $currentProfilePath -PathType Leaf) {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the current session profile...'
+    try {
+      . $currentProfilePath
+      Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'Session profile reloaded.'
+    } catch {
+      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not reload the session profile: $($_.Exception.Message). Restart the shell to pick up the changes."
+    }
+  }
 }
 
 function Get-CrossPlatformSupportPaths {

@@ -193,7 +193,9 @@ function Start-PwshProfileElevated {
     [string] $ScriptPath,
 
     [Parameter(Mandatory)]
-    [string] $NerdFontName
+    [string] $NerdFontName,
+
+    [switch] $Prerelease
   )
 
   if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -210,6 +212,9 @@ function Start-PwshProfileElevated {
   $escapedScriptPath = $ScriptPath.Replace("'", "''")
   $escapedFontName = $NerdFontName.Replace("'", "''")
   $command = "& '$escapedScriptPath' -NerdFontName '$escapedFontName' -RunPhase 'NerdFont'"
+  if ($Prerelease) {
+    $command += ' -Prerelease'
+  }
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
   $arguments = @(
     '-NoProfile',
@@ -250,21 +255,28 @@ function Get-NerdFontsCatalog {
   [CmdletBinding()]
   param (
     [Parameter(Mandatory)]
-    [uri] $RemoteUri
+    [uri] $RemoteUri,
+
+    [Parameter(Mandatory)]
+    [ValidatePattern('^[a-fA-F0-9]{64}$')]
+    [string] $ExpectedSha256
   )
 
   Write-PwshProfileStatus -Stage 'Catalog' -Message 'Loading the latest Nerd Fonts metadata...'
   Write-Verbose "Catalog source: $RemoteUri"
 
-  $headers = @{
-    Accept = 'application/vnd.github.raw+json'
-    'User-Agent' = 'oh-my-posh-profile-setup'
-  }
-
+  $catalogTemporaryPath = Join-Path ([System.IO.Path]::GetTempPath()) "NerdFontsCatalog.$PID.json"
   try {
-    $catalogJson = (Invoke-WebRequest -Uri $RemoteUri -Headers $headers -UseBasicParsing -ErrorAction Stop).Content
+    Save-PwshProfileReleaseAsset -Uri $RemoteUri -Destination $catalogTemporaryPath
+    $catalogHash = (Get-FileHash -LiteralPath $catalogTemporaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($catalogHash -ine $ExpectedSha256) {
+      throw 'SHA-256 verification failed for the published Nerd Fonts catalog.'
+    }
+    $catalogJson = Get-Content -LiteralPath $catalogTemporaryPath -Raw -ErrorAction Stop
   } catch {
-    throw "Unable to load the public Nerd Fonts catalog from '$RemoteUri'. $($_.Exception.Message)"
+    throw "Unable to load the published Nerd Fonts catalog from '$RemoteUri'. $($_.Exception.Message)"
+  } finally {
+    Remove-Item -LiteralPath $catalogTemporaryPath -Force -ErrorAction SilentlyContinue
   }
 
   try {
@@ -1722,52 +1734,6 @@ function Show-PowerShellModuleInventory {
   Write-Host ''
 }
 
-function Get-GitHubRawFileContent {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [uri] $RawUri
-  )
-
-  try {
-    $response = Invoke-WebRequest -Uri $RawUri -UseBasicParsing -ErrorAction Stop
-  } catch {
-    throw "Unable to download '$RawUri'. $($_.Exception.Message)"
-  }
-
-  $lastModified = $null
-  $lastModifiedHeader = @($response.Headers['Last-Modified']) | Select-Object -First 1
-  if ($lastModifiedHeader) {
-    try {
-      $lastModified = [datetimeoffset]::Parse($lastModifiedHeader)
-    } catch {
-      $lastModified = $null
-    }
-  }
-
-  [pscustomobject]@{
-    Content = $response.Content
-    LastModified = $lastModified
-  }
-}
-
-function Get-StringSHA256 {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [AllowEmptyString()]
-    [string] $Value
-  )
-
-  $sha256 = [System.Security.Cryptography.SHA256]::Create()
-  try {
-    $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value))
-    -join ($hashBytes | ForEach-Object { $_.ToString('x2') })
-  } finally {
-    $sha256.Dispose()
-  }
-}
-
 function Compare-PwshProfileSemanticVersion {
   [CmdletBinding()]
   param (
@@ -1834,73 +1800,46 @@ function Compare-PwshProfileSemanticVersion {
   0
 }
 
-function Install-PwshProfileConfiguration {
+function Get-PwshProfileGitHubRelease {
   [CmdletBinding()]
   param (
-    [Parameter(Mandatory)]
-    [uri] $RawUri
+    [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
+
+    [switch] $Prerelease
   )
 
-  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Profile Configuration'
-
-  try {
-    $remoteFile = Get-GitHubRawFileContent -RawUri $RawUri
-  } catch {
-    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not check GitHub for the latest profile: $($_.Exception.Message)"
-    return
+  if (-not $Prerelease) {
+    $release = Invoke-RestMethod `
+      -Uri "https://api.github.com/repos/$Repository/releases/latest" `
+      -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
+      -TimeoutSec 15 `
+      -ErrorAction Stop
+    if ($release.draft -or $release.prerelease) {
+      throw 'The latest stable GitHub Release metadata is invalid.'
+    }
+    return $release
   }
 
-  $supportPaths = Get-CrossPlatformSupportPaths
-  $profilePath = Join-Path $supportPaths.SourceRoot 'Microsoft.PowerShell_profile.ps1'
-  Write-PwshProfileStatus -Stage 'Profile' -Message "Target: $profilePath"
-
-  if (Test-Path -LiteralPath $profilePath -PathType Leaf) {
-    try {
-      $existingContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction Stop
-    } catch {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not read the existing profile; leaving it as-is. $($_.Exception.Message)"
-      return
+  $releases = Invoke-RestMethod `
+    -Uri "https://api.github.com/repos/$Repository/releases?per_page=20" `
+    -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
+    -TimeoutSec 15 `
+    -ErrorAction Stop
+  $release = $null
+  $selectedVersion = $null
+  foreach ($candidate in @($releases | Where-Object { -not $_.draft -and $_.prerelease })) {
+    if ([string]$candidate.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+      continue
     }
-
-    if ($existingContent -eq $remoteFile.Content) {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message 'Already up to date.'
-      return
-    }
-
-    $localLastWriteTime = (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc
-    if ($remoteFile.LastModified -and $remoteFile.LastModified.UtcDateTime -le $localLastWriteTime) {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Current -Message 'Local profile is newer than the GitHub version; leaving it as-is.'
-      return
-    }
-
-    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'A newer PowerShell profile is available on GitHub and would overwrite your local copy.'
-    $confirmation = Read-Host -Prompt "Overwrite '$profilePath'? A backup will be created first. (y/N)"
-    if ($confirmation -notmatch '(?i)^y(es)?$') {
-      Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Skipped: user declined to overwrite the existing profile.'
-      return
-    }
-
-    $backupTimestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss')
-    $backupPath = "$profilePath.$backupTimestamp.bak"
-    Copy-Item -LiteralPath $profilePath -Destination $backupPath -Force
-    Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Backup: $backupPath"
-  }
-  else {
-    $profileDirectory = Split-Path -Path $profilePath -Parent
-    if (-not (Test-Path -LiteralPath $profileDirectory)) {
-      New-Item -ItemType Directory -Path $profileDirectory -Force | Out-Null
+    $candidateVersion = $Matches.version
+    if (-not $release -or
+      (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
+      $release = $candidate
+      $selectedVersion = $candidateVersion
     }
   }
 
-  [System.IO.File]::WriteAllText(
-    [System.IO.Path]::GetFullPath($profilePath),
-    $remoteFile.Content,
-    [System.Text.UTF8Encoding]::new($false)
-  )
-  if ($remoteFile.LastModified) {
-    (Get-Item -LiteralPath $profilePath).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
-  }
-  Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Installed: $profilePath"
+  $release
 }
 
 function Import-PwshProfileConfiguration {
@@ -1939,133 +1878,6 @@ function Get-PwshProfileLocalStorePaths {
   }
 }
 
-function Install-PwshProfileLocalStore {
-  [CmdletBinding()]
-  param (
-    [Parameter(Mandatory)]
-    [uri] $ThemeRawUri,
-
-    [Parameter(Mandatory)]
-    [uri] $SetupRawUri
-  )
-
-  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Local Profile Store (OTA Update Baseline)'
-
-  $paths = Get-PwshProfileLocalStorePaths
-  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
-    if (Test-Path -LiteralPath $folder -PathType Container) {
-      continue
-    }
-    New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
-    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Created: $folder"
-  }
-
-  try {
-    $remoteFile = Get-GitHubRawFileContent -RawUri $ThemeRawUri
-  } catch {
-    Write-PwshProfileStatus -Stage 'Store' -Type Warning -Message "Could not check GitHub for the latest theme: $($_.Exception.Message)"
-    return
-  }
-
-  $themeFileName = Split-Path -Path $ThemeRawUri.AbsolutePath -Leaf
-  $themeDestination = Join-Path $paths.Themes $themeFileName
-  $remoteHash = Get-StringSHA256 -Value $remoteFile.Content
-  $themeIsCurrent = $false
-
-  if (Test-Path -LiteralPath $themeDestination -PathType Leaf) {
-    $localHash = (Get-FileHash -LiteralPath $themeDestination -Algorithm SHA256).Hash
-    if ($localHash -ieq $remoteHash) {
-      Write-PwshProfileStatus -Stage 'Store' -Type Current -Message "Theme already up to date: $themeDestination"
-      $themeIsCurrent = $true
-    }
-  }
-
-  if (-not $themeIsCurrent) {
-    [System.IO.File]::WriteAllText(
-      [System.IO.Path]::GetFullPath($themeDestination),
-      $remoteFile.Content,
-      [System.Text.UTF8Encoding]::new($false)
-    )
-    if ($remoteFile.LastModified) {
-      (Get-Item -LiteralPath $themeDestination).LastWriteTimeUtc = $remoteFile.LastModified.UtcDateTime
-    }
-    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme: $themeDestination"
-  }
-
-  $setupDestination = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
-  try {
-    $setupFile = Get-GitHubRawFileContent -RawUri $SetupRawUri
-    [System.IO.File]::WriteAllText(
-      [System.IO.Path]::GetFullPath($setupDestination),
-      $setupFile.Content,
-      [System.Text.UTF8Encoding]::new($false)
-    )
-    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Updater: $setupDestination"
-  } catch {
-    Write-PwshProfileStatus -Stage 'Store' -Type Warning -Message "Could not install the local profile updater: $($_.Exception.Message)"
-    return
-  }
-
-  $profilePath = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
-  if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
-    Write-PwshProfileStatus -Stage 'Store' -Type Warning -Message "Could not create the OTA baseline because the profile was not found: $profilePath"
-    return
-  }
-
-  $profileContent = Get-Content -LiteralPath $profilePath -Raw -ErrorAction Stop
-  if ($profileContent -notmatch "(?m)^\s*\`$script:PwshProfileVersion\s*=\s*'(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)'\s*$") {
-    Write-PwshProfileStatus -Stage 'Store' -Type Warning -Message 'Could not create the OTA baseline because the profile has no strict SemVer version.'
-    return
-  }
-
-  $version = [ordered]@{
-    schemaVersion = 2
-    version = $Matches.version
-    tag = "v$($Matches.version)"
-    channel = if ($Matches.version -match '-') { 'prerelease' } else { 'stable' }
-    repository = 'smoonlee/oh-my-posh-profile-dev'
-    installedAt = [DateTimeOffset]::UtcNow.ToString('o')
-    artifacts = [ordered]@{
-      profile = [ordered]@{
-        file = 'Microsoft.PowerShell_profile.ps1'
-        sha256 = (Get-FileHash -LiteralPath $profilePath -Algorithm SHA256).Hash.ToLowerInvariant()
-      }
-      theme = [ordered]@{
-        file = $themeFileName
-        sha256 = (Get-FileHash -LiteralPath $themeDestination -Algorithm SHA256).Hash.ToLowerInvariant()
-      }
-      setup = [ordered]@{
-        file = 'Invoke-PwshProfileSetup.ps1'
-        sha256 = (Get-FileHash -LiteralPath $setupDestination -Algorithm SHA256).Hash.ToLowerInvariant()
-      }
-    }
-  }
-
-  $versionJson = $version | ConvertTo-Json -Depth 8
-  $manifestIsCurrent = $false
-  if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
-    try {
-      $existingVersion = Get-Content -LiteralPath $paths.VersionFile -Raw -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
-      $manifestIsCurrent = $existingVersion.schemaVersion -eq 2 -and
-      $existingVersion.version -eq $version.version -and
-      $existingVersion.artifacts.profile.sha256 -ieq $version.artifacts.profile.sha256 -and
-      $existingVersion.artifacts.theme.sha256 -ieq $version.artifacts.theme.sha256 -and
-      $existingVersion.artifacts.setup.sha256 -ieq $version.artifacts.setup.sha256
-    } catch {
-      $manifestIsCurrent = $false
-    }
-  }
-  if (-not $themeIsCurrent -or -not $manifestIsCurrent) {
-    [System.IO.File]::WriteAllText(
-      [System.IO.Path]::GetFullPath($paths.VersionFile),
-      "$versionJson`n",
-      [System.Text.UTF8Encoding]::new($false)
-    )
-    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Version manifest: $($paths.VersionFile)"
-  }
-}
-
 function Save-PwshProfileReleaseAsset {
   [CmdletBinding()]
   param (
@@ -2089,6 +1901,65 @@ function Save-PwshProfileReleaseAsset {
     throw "Unable to download '$Uri'. $($_.Exception.Message)"
   } finally {
     $ProgressPreference = $previousProgressPreference
+  }
+}
+
+function Get-PwshProfileNerdFontsCatalogSource {
+  [CmdletBinding()]
+  param (
+    [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
+
+    [switch] $Prerelease
+  )
+
+  $channel = if ($Prerelease) { 'prerelease' } else { 'stable' }
+  $release = Get-PwshProfileGitHubRelease -Repository $Repository -Prerelease:$Prerelease
+  if (-not $release) {
+    throw "No published $channel release is available."
+  }
+  if ([string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+    throw "Release tag '$($release.tag_name)' is not valid SemVer 2.0."
+  }
+  $releaseVersion = $Matches.version
+
+  $releaseAssets = @{}
+  foreach ($asset in @($release.assets)) {
+    $releaseAssets[[string]$asset.name] = [string]$asset.browser_download_url
+  }
+  foreach ($requiredAsset in @('PwshProfile.release.json', 'NerdFontsCatalog.json')) {
+    if (-not $releaseAssets.ContainsKey($requiredAsset)) {
+      throw "Release $($release.tag_name) does not contain $requiredAsset. Publish a newer release with the complete asset bundle."
+    }
+  }
+
+  try {
+    $manifest = Invoke-RestMethod `
+      -Uri $releaseAssets['PwshProfile.release.json'] `
+      -Headers @{ 'User-Agent' = 'pwsh-profile-installer' } `
+      -TimeoutSec 15 `
+      -ErrorAction Stop
+  } catch {
+    throw "Could not retrieve the release manifest. $($_.Exception.Message)"
+  }
+
+  if ($manifest.schemaVersion -ne 1 -or
+    [string]$manifest.version -ne $releaseVersion -or
+    [string]$manifest.tag -ne [string]$release.tag_name -or
+    [string]$manifest.channel -ne $channel -or
+    [string]$manifest.repository -ne $Repository) {
+    throw 'The release manifest does not match the selected GitHub Release metadata.'
+  }
+
+  $catalog = $manifest.artifacts.catalog
+  if ([string]$catalog.asset -ne 'NerdFontsCatalog.json' -or
+    [string]$catalog.sha256 -notmatch '^[a-fA-F0-9]{64}$') {
+    throw 'The release manifest entry for the Nerd Fonts catalog is invalid.'
+  }
+
+  [pscustomobject]@{
+    Uri = [uri]$releaseAssets['NerdFontsCatalog.json']
+    Sha256 = [string]$catalog.sha256
+    ReleaseTag = [string]$release.tag_name
   }
 }
 
@@ -2149,12 +2020,20 @@ function Invoke-PwshProfileUpdate {
   param (
     [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
 
-    [switch] $Prerelease
+    [switch] $Prerelease,
+
+    [switch] $Bootstrap
   )
 
-  Write-PwshProfileHeader -Title 'Pwsh Profile Updater' -Subtitle 'Verified GitHub Release Update'
+  $operation = if ($Bootstrap) { 'Installation' } else { 'Update' }
+  Write-PwshProfileHeader -Title "Pwsh Profile $operation" -Subtitle 'Verified GitHub Release Assets'
 
   $paths = Get-PwshProfileLocalStorePaths
+  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+      New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
+    }
+  }
   $profilePath = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
   $themePath = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
   $setupPath = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
@@ -2164,107 +2043,105 @@ function Invoke-PwshProfileUpdate {
     setup = $setupPath
   }
 
-  if (-not (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf)) {
+  $installed = $null
+  if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
+    try {
+      $candidateManifest = Get-Content -LiteralPath $paths.VersionFile -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+      if ($candidateManifest.schemaVersion -eq 2 -and
+        $candidateManifest.version -and
+        $candidateManifest.artifacts) {
+        $installed = $candidateManifest
+      }
+      elseif (-not $Bootstrap) {
+        Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'The legacy OTA baseline must be migrated by running the Profile setup phase.'
+        return $false
+      }
+    } catch {
+      if (-not $Bootstrap) {
+        Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "The local version manifest is invalid: $($_.Exception.Message)"
+        return $false
+      }
+      Write-PwshProfileStatus -Stage 'Install' -Type Warning -Message 'The existing version manifest is invalid and will be replaced only after release verification succeeds.'
+    }
+  }
+  elseif (-not $Bootstrap) {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'No tracked installation baseline was found. Run the Profile setup phase first.'
-    return
+    return $false
   }
 
-  try {
-    $installed = Get-Content -LiteralPath $paths.VersionFile -Raw -ErrorAction Stop |
-      ConvertFrom-Json -ErrorAction Stop
-  } catch {
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "The local version manifest is invalid: $($_.Exception.Message)"
-    return
-  }
-
-  if ($installed.schemaVersion -ne 2 -or -not $installed.version -or -not $installed.artifacts) {
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'The legacy OTA baseline must be migrated. Run the Profile setup phase once, then retry.'
-    return
-  }
-
-  try {
-    [void](Compare-PwshProfileSemanticVersion -Left ([string]$installed.version) -Right ([string]$installed.version))
-    $currentVersion = [string]$installed.version
-  } catch {
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "The installed version '$($installed.version)' is not valid SemVer."
-    return
+  $currentVersion = $null
+  if ($installed) {
+    try {
+      [void](Compare-PwshProfileSemanticVersion -Left ([string]$installed.version) -Right ([string]$installed.version))
+      $currentVersion = [string]$installed.version
+    } catch {
+      if (-not $Bootstrap) {
+        Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "The installed version '$($installed.version)' is not valid SemVer."
+        return $false
+      }
+      $installed = $null
+      Write-PwshProfileStatus -Stage 'Install' -Type Warning -Message 'The existing baseline version is invalid and will not be trusted.'
+    }
   }
 
   $channel = if ($Prerelease) { 'prerelease' } else { 'stable' }
-  Write-PwshProfileStatus -Stage 'Update' -Message "Installed version: $currentVersion"
-  Write-PwshProfileStatus -Stage 'Update' -Message "Requested channel: $channel"
+  if ($currentVersion) {
+    Write-PwshProfileStatus -Stage $operation -Message "Installed version: $currentVersion"
+  }
+  Write-PwshProfileStatus -Stage $operation -Message "Requested channel: $channel"
   try {
-    if ($Prerelease) {
-      $releases = Invoke-RestMethod `
-        -Uri "https://api.github.com/repos/$Repository/releases?per_page=20" `
-        -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-        -TimeoutSec 15 `
-        -ErrorAction Stop
-      $release = $null
-      $selectedVersion = $null
-      foreach ($candidate in @($releases | Where-Object { -not $_.draft -and $_.prerelease })) {
-        if ([string]$candidate.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
-          continue
-        }
-        $candidateVersion = $Matches.version
-        if (-not $release -or
-          (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
-          $release = $candidate
-          $selectedVersion = $candidateVersion
-        }
-      }
-    }
-    else {
-      $release = Invoke-RestMethod `
-        -Uri "https://api.github.com/repos/$Repository/releases/latest" `
-        -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-        -TimeoutSec 15 `
-        -ErrorAction Stop
-    }
+    $release = Get-PwshProfileGitHubRelease -Repository $Repository -Prerelease:$Prerelease
   } catch {
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Could not query the latest $channel GitHub Release: $($_.Exception.Message)"
-    return
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Could not query the latest $channel GitHub Release: $($_.Exception.Message)"
+    return $false
   }
 
   if (-not $release) {
-    Write-PwshProfileStatus -Stage 'Update' -Type Current -Message "No $channel GitHub Release is available."
-    return
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "No $channel GitHub Release is available."
+    if (-not $Prerelease) {
+      Write-PwshProfileStatus -Stage 'Next' -Message 'Use -Prerelease only when you intentionally want to install a published prerelease.'
+    }
+    return $false
   }
 
   if ($release.draft -or
     [bool]$release.prerelease -ne [bool]$Prerelease -or
     [string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "The latest $channel release tag '$($release.tag_name)' is not valid for the requested channel."
-    return
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "The latest $channel release tag '$($release.tag_name)' is not valid for the requested channel."
+    return $false
   }
 
   $latestVersionText = $Matches.version
-  Write-PwshProfileStatus -Stage 'Update' -Message "Latest version: $latestVersionText"
-  if ((Compare-PwshProfileSemanticVersion -Left $latestVersionText -Right $currentVersion) -le 0) {
-    Write-PwshProfileStatus -Stage 'Update' -Type Current -Message 'Already up to date.'
-    return
-  }
+  Write-PwshProfileStatus -Stage $operation -Message "Selected release: $($release.tag_name)"
 
   $drift = [System.Collections.Generic.List[string]]::new()
-  foreach ($name in $destinations.Keys) {
-    $path = $destinations[$name]
-    $expectedHash = [string]$installed.artifacts.$name.sha256
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-      $drift.Add("$name is missing: $path")
-      continue
-    }
-    $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualHash -ine $expectedHash) {
-      $drift.Add("$name was modified: $path")
+  if ($installed) {
+    foreach ($name in $destinations.Keys) {
+      $path = $destinations[$name]
+      $expectedHash = [string]$installed.artifacts.$name.sha256
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $drift.Add("$name is missing: $path")
+        continue
+      }
+      $actualHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($actualHash -ine $expectedHash) {
+        $drift.Add("$name was modified: $path")
+      }
     }
   }
-  if ($drift.Count -gt 0) {
+  if ($drift.Count -gt 0 -and -not $Bootstrap) {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'Update refused because tracked files differ from the installed baseline.'
     foreach ($item in $drift) {
       Write-PwshProfileStatus -Stage 'Drift' -Type Warning -Message $item
     }
     Write-PwshProfileStatus -Stage 'Next' -Message 'Restore the tracked files or run the Profile setup phase to intentionally establish a new baseline.'
-    return
+    return $false
+  }
+  if (-not $Bootstrap -and
+    (Compare-PwshProfileSemanticVersion -Left $latestVersionText -Right $currentVersion) -le 0) {
+    Write-PwshProfileStatus -Stage 'Update' -Type Current -Message 'Already up to date.'
+    return $true
   }
 
   $releaseAssets = @{}
@@ -2274,7 +2151,7 @@ function Invoke-PwshProfileUpdate {
   $manifestAssetName = 'PwshProfile.release.json'
   if (-not $releaseAssets.ContainsKey($manifestAssetName)) {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Release $($release.tag_name) does not contain $manifestAssetName."
-    return
+    return $false
   }
 
   $manifestTemporaryPath = Join-Path $paths.Root ".$manifestAssetName.$PID.tmp"
@@ -2284,7 +2161,7 @@ function Invoke-PwshProfileUpdate {
       ConvertFrom-Json -ErrorAction Stop
   } catch {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Could not retrieve the release manifest: $($_.Exception.Message)"
-    return
+    return $false
   } finally {
     Remove-Item -LiteralPath $manifestTemporaryPath -Force -ErrorAction SilentlyContinue
   }
@@ -2295,7 +2172,7 @@ function Invoke-PwshProfileUpdate {
     [string]$remoteManifest.channel -ne $channel -or
     [string]$remoteManifest.repository -ne $Repository) {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'The release manifest does not match the GitHub Release metadata.'
-    return
+    return $false
   }
 
   $artifactNames = [ordered]@{
@@ -2342,15 +2219,55 @@ function Invoke-PwshProfileUpdate {
     foreach ($stagedPath in $stagedPaths.Values) {
       Remove-Item -LiteralPath $stagedPath -Force -ErrorAction SilentlyContinue
     }
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Release validation failed; no installed files were changed. $($_.Exception.Message)"
-    return
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Release validation failed; no installed files were changed. $($_.Exception.Message)"
+    return $false
+  }
+
+  if ($Bootstrap) {
+    $conflicts = [System.Collections.Generic.List[string]]::new()
+    foreach ($name in $artifactNames.Keys) {
+      if (-not (Test-Path -LiteralPath $destinations[$name] -PathType Leaf)) {
+        continue
+      }
+      $localHash = (Get-FileHash -LiteralPath $destinations[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
+      $releaseHash = ([string]$remoteManifest.artifacts.$name.sha256).ToLowerInvariant()
+      if ($localHash -ine $releaseHash) {
+        $conflicts.Add("$name differs: $($destinations[$name])")
+      }
+    }
+
+    if ($conflicts.Count -gt 0) {
+      Write-PwshProfileStatus -Stage 'Install' -Type Warning -Message "Published release $($release.tag_name) differs from existing local files."
+      foreach ($conflict in $conflicts) {
+        Write-PwshProfileStatus -Stage 'Conflict' -Type Warning -Message $conflict
+      }
+      $confirmation = Read-Host -Prompt 'Replace these files with verified release assets? Timestamped backups will be retained. (y/N)'
+      if ($confirmation -notmatch '(?i)^y(es)?$') {
+        foreach ($stagedPath in $stagedPaths.Values) {
+          Remove-Item -LiteralPath $stagedPath -Force -ErrorAction SilentlyContinue
+        }
+        Write-PwshProfileStatus -Stage 'Install' -Type Warning -Message 'Skipped: user declined to install the published release.'
+        return $false
+      }
+    }
   }
 
   $backupTimestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss')
   $backups = @{}
+  $destinationExisted = @{}
   $replaced = [System.Collections.Generic.List[string]]::new()
   try {
     foreach ($name in $artifactNames.Keys) {
+      $destinationExisted[$name] = Test-Path -LiteralPath $destinations[$name] -PathType Leaf
+      if ($destinationExisted[$name]) {
+        $localHash = (Get-FileHash -LiteralPath $destinations[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
+        $releaseHash = ([string]$remoteManifest.artifacts.$name.sha256).ToLowerInvariant()
+        if ($localHash -ieq $releaseHash) {
+          Write-PwshProfileStatus -Stage 'Install' -Type Current -Message "Already verified: $($destinations[$name])"
+          continue
+        }
+      }
+
       $backupPath = "$($destinations[$name]).$backupTimestamp.bak"
       Install-PwshProfileAtomicFile `
         -StagedPath $stagedPaths[$name] `
@@ -2399,9 +2316,12 @@ function Invoke-PwshProfileUpdate {
       if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
         Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction SilentlyContinue
       }
+      elseif (-not $destinationExisted[$name]) {
+        Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction SilentlyContinue
+      }
     }
-    Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Installation failed and the previous files were restored. $($_.Exception.Message)"
-    return
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Installation failed and the previous files were restored. $($_.Exception.Message)"
+    return $false
   } finally {
     foreach ($stagedPath in $stagedPaths.Values) {
       Remove-Item -LiteralPath $stagedPath -Force -ErrorAction SilentlyContinue
@@ -2409,8 +2329,12 @@ function Invoke-PwshProfileUpdate {
   }
 
   Remove-Item -LiteralPath (Join-Path $paths.Root 'update-state.json') -Force -ErrorAction SilentlyContinue
-  Write-PwshProfileStatus -Stage 'Complete' -Type Success -Message "Updated to Pwsh Profile v$latestVersionText. Backups were retained with suffix .$backupTimestamp.bak."
-  Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Open a new PowerShell session to load the updated profile.'
+  $completedAction = if ($Bootstrap) { 'Installed' } else { 'Updated' }
+  Write-PwshProfileStatus -Stage 'Complete' -Type Success -Message "$completedAction Pwsh Profile v$latestVersionText from verified $channel release assets."
+  if (-not $Bootstrap) {
+    Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Open a new PowerShell session to load the updated profile.'
+  }
+  return $true
 }
 
 function Invoke-GitHubConfiguration {
@@ -2473,12 +2397,15 @@ function Invoke-GitHubConfiguration {
 
 function Invoke-PwshProfileConfiguration {
   [CmdletBinding()]
-  param ()
+  param (
+    [switch] $Prerelease
+  )
 
-  Install-PwshProfileConfiguration -RawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/profile/Microsoft.PowerShell_profile.ps1'
-  Install-PwshProfileLocalStore `
-    -ThemeRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json' `
-    -SetupRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/Invoke-PwshProfileSetup.ps1'
+  $releaseInstalled = Invoke-PwshProfileUpdate -Bootstrap -Prerelease:$Prerelease
+  if (-not $releaseInstalled) {
+    Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message 'Profile configuration stopped because no verified release was installed.'
+    return
+  }
   Invoke-CrossPlatformProfileConfiguration
   Invoke-GitHubConfiguration
   Import-PwshProfileConfiguration
@@ -2486,7 +2413,9 @@ function Invoke-PwshProfileConfiguration {
 
 function Invoke-PowerShellModuleConfiguration {
   [CmdletBinding()]
-  param ()
+  param (
+    [switch] $Prerelease
+  )
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Module Configuration'
 
@@ -2513,7 +2442,7 @@ function Invoke-PowerShellModuleConfiguration {
   $summaryType = if ($summary.Failed -gt 0) { 'Warning' } elseif ($summary.Updated -gt 0) { 'Success' } else { 'Current' }
   Write-PwshProfileStatus -Stage 'Modules' -Type $summaryType -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
 
-  Invoke-PwshProfileConfiguration
+  Invoke-PwshProfileConfiguration -Prerelease:$Prerelease
 }
 
 function Get-CrossPlatformSupportPaths {
@@ -3034,9 +2963,12 @@ if (-not $nerdFontName -and $RunPhase -in @('All', 'NerdFont')) {
 if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Nerd Font Configuration'
 
-  $nerdFontsCatalogUri = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/NerdFontsCatalog.json'
   $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
-  $nerdFontsCatalog = Get-NerdFontsCatalog -RemoteUri $nerdFontsCatalogUri
+  $catalogSource = Get-PwshProfileNerdFontsCatalogSource -Prerelease:$Prerelease
+  Write-PwshProfileStatus -Stage 'Catalog' -Message "Using verified asset from $($catalogSource.ReleaseTag)."
+  $nerdFontsCatalog = Get-NerdFontsCatalog `
+    -RemoteUri $catalogSource.Uri `
+    -ExpectedSha256 $catalogSource.Sha256
   $selectedNerdFont = Resolve-NerdFont -Catalog $nerdFontsCatalog -Name $nerdFontName
 
   # Download archives use ArchiveName.zip; keep the validated friendly name intact.
@@ -3080,7 +3012,10 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
   else {
     Write-PwshProfileStatus -Stage 'Action' -Type Action -Message "$nerdFontName requires installation: $($installDecision.Reason)."
     if (-not (Test-PwshProfileAdministrator)) {
-      Start-PwshProfileElevated -ScriptPath $PSCommandPath -NerdFontName $nerdFontName
+      Start-PwshProfileElevated `
+        -ScriptPath $PSCommandPath `
+        -NerdFontName $nerdFontName `
+        -Prerelease:$Prerelease
       $installedNerdFontFiles = @(
         Find-InstalledNerdFont -Font $selectedNerdFont -FontDirectories $windowsFontDirectories
       )
@@ -3110,13 +3045,13 @@ if ($RunPhase -in @('All', 'Winget')) {
 }
 
 if ($RunPhase -in @('All', 'Modules')) {
-  Invoke-PowerShellModuleConfiguration
+  Invoke-PowerShellModuleConfiguration -Prerelease:$Prerelease
 }
 
 if ($RunPhase -eq 'Profile') {
-  Invoke-PwshProfileConfiguration
+  Invoke-PwshProfileConfiguration -Prerelease:$Prerelease
 }
 
 if ($RunPhase -eq 'ProfileUpdate') {
-  Invoke-PwshProfileUpdate -Prerelease:$Prerelease
+  [void](Invoke-PwshProfileUpdate -Prerelease:$Prerelease)
 }

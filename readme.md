@@ -24,9 +24,11 @@ Windows sudo is unavailable, disabled, or configured for a new window, the scrip
 falls back to native UAC, which must start a separate elevated PowerShell process.
 Use `-Verbose` to show the catalog source and elevation fallback guidance.
 
-The standalone script always loads the public catalog directly into the
-`$nerdFontsCatalog` variable for that run. It does not read or create a local
-`NerdFontsCatalog.json`, and no GitHub authentication is required.
+The standalone script loads `NerdFontsCatalog.json` from the selected published
+GitHub Release into `$nerdFontsCatalog` for that run and verifies its SHA-256
+hash against `PwshProfile.release.json`. It does not read or create a local
+catalog, and no GitHub authentication is required. The repository's `main`
+branch is development-only and is never used as a runtime installation source.
 
 The selected friendly name is resolved to `$nerdFontArchiveName` for downloading
 `$nerdFontArchiveName.zip`. The generated `NerdFontsCatalog.json` also provides the
@@ -110,17 +112,20 @@ root.
 
 ## PowerShell profile configuration
 
-After the Winget phase, the script deploys `src/profile/Microsoft.PowerShell_profile.ps1`
-to the current user's PowerShell profile (`$PROFILE.CurrentUserCurrentHost`), which
-loads the repository's `quick-term-cloud.omp.json` theme via `oh-my-posh init`.
+After the Winget phase, the script installs the profile, theme, and local updater
+from an immutable published GitHub Release. The profile is installed for the
+current user and loads the verified local `quick-term-cloud.omp.json` via
+`oh-my-posh init`.
 
-- If no profile file exists yet, it's created (creating the parent directory if
-  needed).
-- If a profile file already exists and differs from the repository version, the
-  script warns and prompts for confirmation before overwriting. A timestamped
-  backup (for example `Microsoft.PowerShell_profile.ps1.20260825140530.bak`) is
-  created first.
-- If the existing profile already matches, nothing is changed.
+- Stable releases are selected by default. Use `-Prerelease` to explicitly
+  select the highest published prerelease.
+- Every asset is verified against `PwshProfile.release.json` before any file is
+  changed; there is no fallback to `main`.
+- If existing local files differ, the script warns and prompts before replacing
+  them. Timestamped backups are retained.
+- If existing files already match the release, they are left unchanged.
+- If installation or the final baseline write fails, replaced files are rolled
+  back and newly created files are removed.
 - After configuration finishes, the profile is loaded into the current
   PowerShell session.
 
@@ -129,6 +134,16 @@ Run just this phase with:
 ```powershell
 .\Invoke-PwshProfileSetup.ps1 -RunPhase Profile
 ```
+
+To install a published prerelease for testing:
+
+```powershell
+.\Invoke-PwshProfileSetup.ps1 -RunPhase Profile -Prerelease
+```
+
+Download `Invoke-PwshProfileSetup.ps1` itself from the desired GitHub Release,
+not from the repository branch. A stable install fails closed when no stable
+release exists; it does not silently select a prerelease.
 
 This phase also creates `%APPDATA%\PwshProfile\version.json` using manifest
 schema v2. The manifest records the installed version and SHA-256 hashes of the
@@ -156,7 +171,7 @@ release is newer; installation remains manual.
   `PwshProfile.release.json` manifest.
 2. Compares all installed files with their schema v2 baseline and refuses the
   update if the profile, theme, or updater was locally modified or removed.
-3. Downloads the three assets beside their destinations, verifies every SHA-256
+3. Downloads the three installed assets beside their destinations, verifies every SHA-256
   hash, parses both PowerShell files, validates the theme JSON, and confirms the
   profile's embedded version.
 4. Replaces the files atomically while retaining timestamped backups. If any
@@ -186,10 +201,11 @@ published. Before creating a release:
 3. Publish the GitHub Release for that tag. GitHub's **Set as a pre-release**
   setting must match whether the SemVer value contains a prerelease component.
 
-The workflow validates the tag and embedded version, parses the profile and
-theme, computes SHA-256 hashes from the tagged files, generates
-`PwshProfile.release.json`, and uploads the profile, theme, setup script, and
-manifest as release assets. It does not overwrite an existing release asset.
+The workflow validates the tag and embedded version, parses the profile, theme,
+and Nerd Fonts catalog, computes SHA-256 hashes from the tagged files, generates
+`PwshProfile.release.json`, and uploads the profile, theme, setup script, Nerd
+Fonts catalog, and manifest as release assets. It does not overwrite an existing
+release asset.
 Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Dynamic prompt updates

@@ -41,6 +41,7 @@ jobs:
           $profilePath = './src/profile/Microsoft.PowerShell_profile.ps1'
           $themePath = './src/themes/quick-term-cloud.omp.json'
           $setupPath = './src/Invoke-PwshProfileSetup.ps1'
+          $catalogPath = './NerdFontsCatalog.json'
           $changelogPath = './CHANGELOG.md'
           $profileContent = Get-Content -LiteralPath $profilePath -Raw
 
@@ -54,6 +55,10 @@ jobs:
           }
 
           $null = Get-Content -LiteralPath $themePath -Raw | ConvertFrom-Json -ErrorAction Stop
+          $catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json -ErrorAction Stop
+          if (-not $catalog.NerdFontsVersion -or @($catalog.Fonts).Count -eq 0) {
+            throw 'NerdFontsCatalog.json is missing NerdFontsVersion or font entries.'
+          }
           foreach ($scriptPath in @($profilePath, $setupPath)) {
             $tokens = $null
             $parseErrors = $null
@@ -81,6 +86,10 @@ jobs:
             setup = [ordered]@{
               asset = 'Invoke-PwshProfileSetup.ps1'
               source = 'src/Invoke-PwshProfileSetup.ps1'
+            }
+            catalog = [ordered]@{
+              asset = 'NerdFontsCatalog.json'
+              source = 'NerdFontsCatalog.json'
             }
           }
 
@@ -115,4 +124,5 @@ jobs:
             (Join-Path $env:assetRoot 'Microsoft.PowerShell_profile.ps1') `
             (Join-Path $env:assetRoot 'quick-term-cloud.omp.json') `
             (Join-Path $env:assetRoot 'Invoke-PwshProfileSetup.ps1') `
+            (Join-Path $env:assetRoot 'NerdFontsCatalog.json') `
             (Join-Path $env:assetRoot 'PwshProfile.release.json')

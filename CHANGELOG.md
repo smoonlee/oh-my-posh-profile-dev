@@ -7,6 +7,21 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.2] - 2026-08-25
+
+### Release sourcing
+
+- Install initial profile configurations only from verified stable or explicitly
+  selected prerelease assets; treat `main` as development-only.
+- Publish and verify `NerdFontsCatalog.json` as part of the immutable release
+  bundle instead of loading it from the mutable repository branch.
+
+### Release integrity
+
+- Reuse release metadata, manifest validation, SHA-256 checks, syntax checks,
+  atomic replacement, backups, and rollback for first-time profile installs.
+- Removed all project-owned raw-`main` runtime download paths.
+
 ## [4.0.0-pre-release-0.1] - 2026-08-25
 
 ### Added
@@ -47,5 +62,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.1...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.2...HEAD
+[4.0.0-pre-release-0.2]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.2
 [4.0.0-pre-release-0.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/releases/tag/v4.0.0-pre-release-0.1

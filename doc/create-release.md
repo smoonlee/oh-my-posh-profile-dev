@@ -11,7 +11,7 @@ alone does not run `.github/workflows/publish-profile-release.yml`.
 3. Commit the release changes and push `main`.
 4. Create an annotated tag on that exact commit and push the tag.
 5. Publish a GitHub Release for the tag.
-6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all four
+6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all five
    release assets.
 
 If changes go through a pull request, merge the PR first, update local `main`
@@ -20,7 +20,7 @@ unmerged feature branch.
 
 ## Prerelease example
 
-For `4.0.0-pre-release-0.1`, the embedded version, changelog heading, tag, and
+For `4.0.0-pre-release-0.2`, the embedded version, changelog heading, tag, and
 GitHub Release must all use the exact same value.
 
 ```powershell
@@ -33,18 +33,18 @@ git diff --check
 
 # Commit and push the release commit first.
 git add --all
-git commit -m "Release v4.0.0-pre-release-0.1"
+git commit -m "Release v4.0.0-pre-release-0.2"
 git push origin main
 
 # Tag the commit that is now on origin/main.
-git tag -a v4.0.0-pre-release-0.1 -m "Release v4.0.0-pre-release-0.1"
-git push origin v4.0.0-pre-release-0.1
+git tag -a v4.0.0-pre-release-0.2 -m "Release v4.0.0-pre-release-0.2"
+git push origin v4.0.0-pre-release-0.2
 
 # Publishing the prerelease triggers the asset workflow.
-gh release create v4.0.0-pre-release-0.1 `
+gh release create v4.0.0-pre-release-0.2 `
   --verify-tag `
   --prerelease `
-  --title "v4.0.0-pre-release-0.1" `
+   --title "v4.0.0-pre-release-0.2" `
   --notes-from-tag
 ```
 
@@ -55,7 +55,7 @@ For a stable release, use a stable SemVer such as `4.0.0` and omit
 
 ```powershell
 gh run list --workflow "Publish Pwsh Profile Release" --limit 5
-gh release view v4.0.0-pre-release-0.1 --json isPrerelease,tagName,url,assets
+gh release view v4.0.0-pre-release-0.2 --json isPrerelease,tagName,url,assets
 ```
 
 A successful release contains:
@@ -63,6 +63,7 @@ A successful release contains:
 - `Microsoft.PowerShell_profile.ps1`
 - `quick-term-cloud.omp.json`
 - `Invoke-PwshProfileSetup.ps1`
+- `NerdFontsCatalog.json`
 - `PwshProfile.release.json`
 
 The workflow rejects a release when:

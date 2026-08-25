@@ -2183,6 +2183,39 @@ function Remove-PwshProfileResetItem {
   }
 }
 
+function Invoke-PwshProfileModuleUnload {
+  [CmdletBinding()]
+  param (
+    [AllowEmptyCollection()]
+    [object[]] $Modules = @(Get-Module)
+  )
+
+  $preservedModuleNames = @('PSReadLine', 'PowerShellGet', 'PackageManagement')
+  $modulesToUnload = @(
+    $Modules |
+      Where-Object { $_.Name -notin $preservedModuleNames } |
+      Sort-Object Name, Version -Descending
+  )
+
+  foreach ($preservedModule in @($Modules | Where-Object { $_.Name -in $preservedModuleNames })) {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message "Preserved loaded module: $($preservedModule.Name) $($preservedModule.Version)"
+  }
+
+  if ($modulesToUnload.Count -eq 0) {
+    Write-PwshProfileStatus -Stage 'Modules' -Type Current -Message 'No other loaded modules require unloading.'
+    return
+  }
+
+  foreach ($module in $modulesToUnload) {
+    try {
+      Remove-Module -ModuleInfo $module -Force -ErrorAction Stop
+      Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Unloaded module: $($module.Name) $($module.Version)"
+    } catch {
+      Write-PwshProfileStatus -Stage 'Modules' -Type Warning -Message "Could not unload module '$($module.Name)' $($module.Version): $($_.Exception.Message)"
+    }
+  }
+}
+
 function Invoke-PwshProfileReset {
   [CmdletBinding()]
   param (
@@ -2194,6 +2227,7 @@ function Invoke-PwshProfileReset {
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'DESTRUCTIVE Profile Reset'
   Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'RESET WILL PERMANENTLY DELETE BOTH USER POWERSHELL CONFIGURATION FOLDERS.'
   Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'ALL user-installed PowerShell modules, profiles, profile backups, and symbolic links in those folders will be removed.'
+  Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'All loaded modules except PSReadLine, PowerShellGet, and PackageManagement will be unloaded from this session.'
   Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'The local PwshProfile store, installer state, and legacy quick-term-cloud theme copies will also be removed.'
   Write-PwshProfileStatus -Stage 'Backup' -Type Warning -Message 'Take a backup of anything you need before continuing.'
   Write-PwshProfileStatus -Stage 'Retained' -Type Current -Message 'Oh My Posh, Winget applications, Windows Terminal settings, and system-wide PowerShell modules will not be uninstalled.'
@@ -2244,6 +2278,7 @@ function Invoke-PwshProfileReset {
   $summaryType = if ($failedCount -gt 0) { 'Warning' } else { 'Success' }
   Write-PwshProfileStatus -Stage 'Complete' -Type $summaryType -Message "Reset complete: $removedCount removed, $absentCount already absent, $failedCount failed."
   Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close PowerShell, open a new session, and run the installer again for a clean setup.'
+  Invoke-PwshProfileModuleUnload
 }
 
 if ($Reset) {

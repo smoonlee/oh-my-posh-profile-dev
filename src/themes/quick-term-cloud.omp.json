@@ -43,10 +43,10 @@
           "type": "root",
           "style": "diamond",
           "leading_diamond": "",
-          "trailing_diamond": "\ue0b0",
+          "trailing_diamond": "",
           "foreground": "#ffffff",
           "background": "#da3633",
-          "template": " \uf071 ELEVATED"
+          "template": " \uf071 ELEVATED "
         },
         {
           "type": "path",

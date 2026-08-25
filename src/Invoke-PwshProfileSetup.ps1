@@ -940,7 +940,7 @@ function Update-WingetClient {
     $latestVersion = [version]($release.tag_name.TrimStart('v'))
 
     if ($currentVersion -ge $latestVersion) {
-      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Version: $currentVersion (latest)"
+      Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "Version: $currentVersion [latest]"
       return
     }
 
@@ -1213,7 +1213,7 @@ function Invoke-WingetConfiguration {
           Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
           $summary.Updated++
         } else {
-          Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) installed $installedVersion (latest) [$($state.Package.Scope)]"
+          Write-PwshProfileStatus -Stage 'Winget' -Type Success -Message "$($state.Package.Id) installed $installedVersion [latest] [$($state.Package.Scope)]"
           $summary.Current++
         }
       } else {

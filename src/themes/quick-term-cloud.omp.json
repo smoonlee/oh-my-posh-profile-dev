@@ -82,6 +82,21 @@
       "alignment": "right",
       "segments": [
         {
+          "type": "status",
+          "style": "diamond",
+          "leading_diamond": "\ue0b6",
+          "invert_powerline": true,
+          "foreground": "#ffffff",
+          "background": "#238636",
+          "background_templates": [
+            "{{ if .Error }}#da3633{{ end }}"
+          ],
+          "template": " {{ if eq .Code 0 }}\uf00c{{ else }}\uf071 {{ .Code }}{{ end }} ",
+          "options": {
+            "always_enabled": true
+          }
+        },
+        {
           "type": "executiontime",
           "min_width": 90,
           "style": "diamond",
@@ -103,12 +118,12 @@
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
           "foreground": "#111111",
-          "background": "#C06EFF",
+          "background": "#8957e5",
           "background_templates": [
-            "{{ if gt .Premium.Percent 90 }}#ff4d4d{{ end }}",
-            "{{ if gt .Premium.Percent 70 }}#ffa94d{{ end }}"
+            "{{ if gt .Premium.Percent 90 }}#da3633{{ end }}",
+            "{{ if gt .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e  {{ .Premium.Remaining.Gauge }} Used:{{ .Premium.Percent }}% ",
+          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}% ",
           "options": {
             "http_timeout": 5000
           },
@@ -208,6 +223,9 @@
           "type": "text",
           "style": "plain",
           "foreground": "#d75f00",
+          "foreground_templates": [
+            "{{ if .Root }}#da3633{{ end }}"
+          ],
           "template": "{{ if .Root }}#{{ else }}${{ end }}"
         }
       ]

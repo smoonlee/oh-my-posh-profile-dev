@@ -6,7 +6,12 @@
 Import-Module -Name Terminal-Icons -ErrorAction SilentlyContinue
 
 # Oh My Posh - Profile for PowerShell
-oh-my-posh init pwsh --config 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json' | Invoke-Expression
+# Falls back to the GitHub raw URL if the setup script hasn't populated the local OTA store yet.
+$ohMyPoshThemePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.json'
+if (-not (Test-Path -LiteralPath $ohMyPoshThemePath -PathType Leaf)) {
+  $ohMyPoshThemePath = 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
+}
+oh-my-posh init pwsh --config $ohMyPoshThemePath | Invoke-Expression
 
 # Azure CLI - IntelliSense Pwsh Support
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&tabs=azure-cli&pivots=winget#enable-tab-completion-on-powershell

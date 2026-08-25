@@ -1589,6 +1589,77 @@ function Install-PwshProfileConfiguration {
   Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message "Installed: $profilePath"
 }
 
+function Get-PwshProfileLocalStorePaths {
+  [CmdletBinding()]
+  param ()
+
+  $root = Join-Path $env:APPDATA 'PwshProfile'
+  [pscustomobject]@{
+    Root = $root
+    Themes = Join-Path $root 'themes'
+    Functions = Join-Path $root 'functions'
+    Config = Join-Path $root 'config'
+    VersionFile = Join-Path $root 'version.json'
+  }
+}
+
+function Install-PwshProfileLocalStore {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $RepoThemePath
+  )
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Local Profile Store (OTA Update Baseline)'
+
+  if (-not (Test-Path -LiteralPath $RepoThemePath -PathType Leaf)) {
+    throw "The repository theme file was not found at '$RepoThemePath'."
+  }
+
+  $paths = Get-PwshProfileLocalStorePaths
+  foreach ($folder in @($paths.Root, $paths.Themes, $paths.Functions, $paths.Config)) {
+    if (Test-Path -LiteralPath $folder -PathType Container) {
+      continue
+    }
+    New-Item -ItemType Directory -Path $folder -Force -ErrorAction Stop | Out-Null
+    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Created: $folder"
+  }
+
+  $themeFileName = Split-Path -Path $RepoThemePath -Leaf
+  $themeDestination = Join-Path $paths.Themes $themeFileName
+  $themeHash = (Get-FileHash -LiteralPath $RepoThemePath -Algorithm SHA256).Hash
+
+  $existingVersion = if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
+    try {
+      Get-Content -LiteralPath $paths.VersionFile -Raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+      $null
+    }
+  }
+
+  if ($existingVersion -and $existingVersion.theme.sha256 -eq $themeHash) {
+    Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme already up to date: $themeDestination"
+    return
+  }
+
+  Copy-Item -LiteralPath $RepoThemePath -Destination $themeDestination -Force
+  Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Theme: $themeDestination"
+
+  # sha256 is a stand-in version marker until this repo publishes real release tags for OTA update checks.
+  $version = [ordered]@{
+    schemaVersion = 1
+    updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
+    theme = [ordered]@{
+      name = [System.IO.Path]::GetFileNameWithoutExtension($themeFileName)
+      file = $themeFileName
+      sha256 = $themeHash
+    }
+  }
+
+  $version | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $paths.VersionFile -Encoding UTF8
+  Write-PwshProfileStatus -Stage 'Store' -Type Success -Message "Version manifest: $($paths.VersionFile)"
+}
+
 function Invoke-PowerShellModuleConfiguration {
   [CmdletBinding()]
   param ()
@@ -1618,6 +1689,7 @@ function Invoke-PowerShellModuleConfiguration {
   Write-PwshProfileStatus -Stage 'Modules' -Type Success -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
 
   Install-PwshProfileConfiguration -RepoProfilePath (Join-Path $PSScriptRoot 'profile\Microsoft.PowerShell_profile.ps1')
+  Install-PwshProfileLocalStore -RepoThemePath (Join-Path $PSScriptRoot 'themes\quick-term-cloud.omp.json')
   Invoke-CrossPlatformProfileConfiguration
 
   $currentProfilePath = $PROFILE.CurrentUserCurrentHost

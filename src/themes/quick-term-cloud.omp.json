@@ -52,7 +52,7 @@
           "type": "path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
-          "template": " {{ .Path | lower }} ",
+          "template": "{{ .Path | lower }} ",
           "foreground": "#ffffff",
           "background": "#0087af",
           "options": {

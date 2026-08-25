@@ -2139,12 +2139,21 @@ function Get-PwshProfileResetTargets {
       Join-Path $ProgramFilesX86Path 'oh-my-posh\themes\quick-term-cloud.omp.json'
     }
   ) | Select-Object -Unique
+  $stalePowerShellRoots = @(
+    Get-ChildItem -LiteralPath $DocumentsPath -Directory -Force -ErrorAction SilentlyContinue |
+      Where-Object {
+      $_.Name -like 'PowerShell.reset-*' -or
+      $_.Name -like 'WindowsPowerShell.reset-*'
+    } |
+      Select-Object -ExpandProperty FullName
+  )
 
   [pscustomobject]@{
     PowerShellRoots = @(
       Join-Path $DocumentsPath 'PowerShell'
       Join-Path $DocumentsPath 'WindowsPowerShell'
     )
+    StalePowerShellRoots = $stalePowerShellRoots
     LocalStore = Join-Path $AppDataPath 'PwshProfile'
     LegacyThemes = @($legacyThemePaths)
     StateRegistry = $StateRegistryPath
@@ -2188,7 +2197,6 @@ if (`$paths.Count -gt 0 -and `$failedPaths.Count -eq 0) {
 } elseif (`$failedPaths.Count -gt 0) {
   Write-Host "[WARNING ] Could not remove: `$(`$failedPaths -join ', ')" -ForegroundColor Yellow
 }
-Write-Host '[Ready   ] Fresh PowerShell session started in the same terminal.' -ForegroundColor Cyan
 "@
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($replacementScript))
   $arguments = @(
@@ -2293,10 +2301,6 @@ function Invoke-PwshProfileModuleUnload {
     return
   }
 
-  foreach ($module in $modulesToUnload) {
-    Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message "Unloading foundational module: $($module.Name) $($module.Version)"
-  }
-
   # Keep this as the final reset operation: unloading foundational modules can remove
   # commands such as Write-Host and Get-Module from the current session.
   Remove-Module -ModuleInfo $modulesToUnload -Force -ErrorAction SilentlyContinue
@@ -2366,6 +2370,9 @@ function Invoke-PwshProfileReset {
   }
   foreach ($target in @($powerShellRootItems | Where-Object { -not $_.Item -or -not ($_.Item.Attributes -band [IO.FileAttributes]::ReparsePoint) })) {
     $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell configuration' -DeferredPaths $deferredPaths))
+  }
+  foreach ($stalePowerShellRoot in @($Targets.StalePowerShellRoots)) {
+    $results.Add((Remove-PwshProfileResetItem -Path $stalePowerShellRoot -Label 'Previous reset folder' -DeferredPaths $deferredPaths))
   }
 
   $results.Add((Remove-PwshProfileResetItem -Path $Targets.LocalStore -Label 'Local profile store' -DeferredPaths $deferredPaths))

@@ -884,15 +884,15 @@ function Get-WingetPackageDefinitions {
 
   @(
     [pscustomobject]@{ Id = 'Amazon.AWSCLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'FireDaemon.OpenSSL'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Git.Git'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'GitHub.cli'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Helm.Helm'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }
     [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'FireDaemon.OpenSSL'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Scope = 'machine' }
   )
 }
@@ -1148,7 +1148,6 @@ function Show-WingetPackageInventory {
     [object[]] $Packages
   )
 
-  Write-PwshProfileStatus -Stage 'Winget' -Message 'Package inventory:'
   $Packages |
     Sort-Object Scope, Id |
     Format-Table -Property `
@@ -1497,7 +1496,6 @@ function Show-PowerShellModuleInventory {
   )
 
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'Modules' -Message 'Module inventory:'
   $Modules |
     Format-Table -Property `
     @{ Label = 'Module'; Expression = { $_.Name } },

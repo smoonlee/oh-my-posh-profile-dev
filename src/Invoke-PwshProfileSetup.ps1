@@ -1627,6 +1627,7 @@ function Invoke-PowerShellModuleConfiguration {
       # scope, not the true interactive global scope, so the live session never actually picks it up.
       # Re-launching the host process in place is the reliable way to make it load the updated profile.
       Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message 'Reloading the session so the updated profile takes effect...'
+      Write-Host ''
 
       # https://stackoverflow.com/questions/11546069/refreshing-restarting-powershell-session-w-out-exiting
       Get-Process -Id $PID | Select-Object -ExpandProperty Path | ForEach-Object { Invoke-Command { & "$_" } -NoNewScope }

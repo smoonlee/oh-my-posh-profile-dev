@@ -892,6 +892,7 @@ function Get-WingetPackageDefinitions {
     [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'FireDaemon.OpenSSL'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Scope = 'machine' }
   )
 }

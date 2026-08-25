@@ -4,7 +4,6 @@
   "final_space": true,
   "async": true,
   "patch_pwsh_bleed": true,
-  "terminal_background": "#11242e",
   "var": {
     "dividerColor": "#d75f00"
   },

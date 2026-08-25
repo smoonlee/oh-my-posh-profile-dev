@@ -881,7 +881,7 @@ function Update-WindowsTerminalFontFace {
 
     if (-not $changed) {
       $statusSuffix = if ($PostInstall) { 'confirmed' } else { 'already configured' }
-      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Install: $FontFace $statusSuffix"
+      Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Face: $FontFace $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory $statusSuffix"
       Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell $statusSuffix"
@@ -898,7 +898,7 @@ function Update-WindowsTerminalFontFace {
       [System.Text.UTF8Encoding]::new($false)
     )
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Config Backup: $backupPath"
-    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Install: $FontFace"
+    Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Face: $FontFace"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Font Size: $FontSize"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message "Starting Directory: $StartingDirectory"
     Write-PwshProfileStatus -Stage 'Terminal' -Type Success -Message 'Profile Order: Pwsh 7, Pwsh 5, Command Prompt, Azure Cloud Shell'
@@ -932,8 +932,8 @@ function Update-WindowsTerminalFromNerdFontFiles {
   $fontFace = Get-NerdFontFaceName -FontFile $FontFiles[0]
   Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'VS Code' -Message "terminal.integrated.fontFamily: $fontFace"
-  Write-PwshProfileStatus -Stage 'VS Code' -Message "editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
+  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended terminal.integrated.fontFamily: $fontFace"
+  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
 }
 
 function Install-NerdFont {

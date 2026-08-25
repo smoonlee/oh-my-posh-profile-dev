@@ -76,14 +76,16 @@ param (
     'VictorMono',
     'ZedMono'
   )]
-  [Parameter(Mandatory, Position = 0)]
+  [Parameter(Position = 0)]
   [Alias('NerdFont')]
   [string] $nerdFontName
   # END GENERATED NERD FONT VALIDATESET
 
   ,
   [ValidateSet('All', 'NerdFont', 'Winget', 'Modules')]
-  [string] $RunPhase = 'All'
+  [string] $RunPhase = 'All',
+
+  [switch] $Reset
 )
 
 function Write-PwshProfileStatus {
@@ -95,7 +97,7 @@ function Write-PwshProfileStatus {
     [Parameter(Mandatory)]
     [string] $Message,
 
-    [ValidateSet('Info', 'Action', 'Current', 'Success', 'Warning')]
+    [ValidateSet('Info', 'Action', 'Current', 'Success', 'Warning', 'Danger')]
     [string] $Type = 'Info'
   )
 
@@ -104,6 +106,7 @@ function Write-PwshProfileStatus {
     'Current' { 'Gray' }
     'Success' { 'Green' }
     'Warning' { 'Yellow' }
+    'Danger' { 'Red' }
     default { 'Gray' }
   }
 
@@ -1851,6 +1854,63 @@ function Install-PwshProfileLocalStore {
   }
 }
 
+function Invoke-GitHubConfiguration {
+  [CmdletBinding()]
+  param ()
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Pwsh: GitHub Configuration'
+
+  $git = Get-Command git -ErrorAction SilentlyContinue
+  if (-not $git) {
+    Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git was not found; global commit identity could not be configured.'
+  } else {
+    $gitUserName = ((& $git.Source config --global --get user.name 2>$null) | Out-String).Trim()
+    $gitUserEmail = ((& $git.Source config --global --get user.email 2>$null) | Out-String).Trim()
+
+    if (-not $gitUserName) {
+      Write-PwshProfileStatus -Stage 'GitHub' -Message 'Git uses your first and last name to identify commits.'
+      $firstName = (Read-Host -Prompt 'Git first name').Trim()
+      $lastName = (Read-Host -Prompt 'Git last name').Trim()
+      $gitUserName = "$firstName $lastName".Trim()
+      if ($firstName -and $lastName) {
+        & $git.Source config --global user.name $gitUserName
+        if ($LASTEXITCODE -eq 0) {
+          Write-PwshProfileStatus -Stage 'GitHub' -Type Success -Message "Git user.name configured: $gitUserName"
+        } else {
+          Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git user.name could not be configured.'
+        }
+      } else {
+        Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git user.name skipped; both first and last name are required.'
+      }
+    } else {
+      Write-PwshProfileStatus -Stage 'GitHub' -Type Current -Message "Git user.name: $gitUserName"
+    }
+
+    if (-not $gitUserEmail) {
+      Write-PwshProfileStatus -Stage 'GitHub' -Message 'Use an email associated with GitHub, or your GitHub no-reply email, for commit attribution.'
+      $gitUserEmail = (Read-Host -Prompt 'GitHub email').Trim()
+      if ($gitUserEmail -match '^[^\s@]+@[^\s@]+\.[^\s@]+$') {
+        & $git.Source config --global user.email $gitUserEmail
+        if ($LASTEXITCODE -eq 0) {
+          Write-PwshProfileStatus -Stage 'GitHub' -Type Success -Message "Git user.email configured: $gitUserEmail"
+        } else {
+          Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git user.email could not be configured.'
+        }
+      } else {
+        Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git user.email skipped; enter a valid email address when the installer is run again.'
+      }
+    } else {
+      Write-PwshProfileStatus -Stage 'GitHub' -Type Current -Message "Git user.email: $gitUserEmail"
+    }
+  }
+
+  Write-Host ''
+  Write-PwshProfileStatus -Stage 'GitHub' -Message 'Git name/email control commit attribution; they do not sign in to GitHub.'
+  Write-PwshProfileStatus -Stage 'GitHub' -Type Action -Message "GitHub CLI sign-in (if needed): gh auth login"
+  Write-PwshProfileStatus -Stage 'Copilot' -Type Action -Message "Authenticate the prompt usage segment: oh-my-posh auth copilot"
+  Write-PwshProfileStatus -Stage 'Copilot' -Message 'Oh My Posh opens GitHub device login and securely stores the token for future prompt usage checks.'
+}
+
 function Invoke-PowerShellModuleConfiguration {
   [CmdletBinding()]
   param ()
@@ -1883,6 +1943,7 @@ function Invoke-PowerShellModuleConfiguration {
   Install-PwshProfileConfiguration -RawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/profile/Microsoft.PowerShell_profile.ps1'
   Install-PwshProfileLocalStore -ThemeRawUri 'https://raw.githubusercontent.com/smoonlee/oh-my-posh-profile-dev/main/src/themes/quick-term-cloud.omp.json'
   Invoke-CrossPlatformProfileConfiguration
+  Invoke-GitHubConfiguration
 }
 
 function Get-CrossPlatformSupportPaths {
@@ -2046,6 +2107,152 @@ function Invoke-CrossPlatformProfileConfiguration {
   } catch {
     Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Cross-platform support failed: $($_.Exception.Message)"
   }
+}
+
+function Get-PwshProfileResetTargets {
+  [CmdletBinding()]
+  param (
+    [string] $DocumentsPath = [Environment]::GetFolderPath('MyDocuments'),
+
+    [string] $AppDataPath = $env:APPDATA,
+
+    [string] $LocalAppDataPath = $env:LOCALAPPDATA,
+
+    [string] $ProgramFilesPath = $env:ProgramFiles,
+
+    [string] $ProgramFilesX86Path = ${env:ProgramFiles(x86)},
+
+    [string] $StateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile'
+  )
+
+  $legacyThemePaths = @(
+    if ($env:POSH_THEMES_PATH) {
+      Join-Path $env:POSH_THEMES_PATH 'quick-term-cloud.omp.json'
+    }
+    if ($LocalAppDataPath) {
+      Join-Path $LocalAppDataPath 'Programs\oh-my-posh\themes\quick-term-cloud.omp.json'
+    }
+    if ($ProgramFilesPath) {
+      Join-Path $ProgramFilesPath 'oh-my-posh\themes\quick-term-cloud.omp.json'
+    }
+    if ($ProgramFilesX86Path) {
+      Join-Path $ProgramFilesX86Path 'oh-my-posh\themes\quick-term-cloud.omp.json'
+    }
+  ) | Select-Object -Unique
+
+  [pscustomobject]@{
+    PowerShellRoots = @(
+      Join-Path $DocumentsPath 'PowerShell'
+      Join-Path $DocumentsPath 'WindowsPowerShell'
+    )
+    LocalStore = Join-Path $AppDataPath 'PwshProfile'
+    LegacyThemes = @($legacyThemePaths)
+    StateRegistry = $StateRegistryPath
+  }
+}
+
+function Remove-PwshProfileResetItem {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $Path,
+
+    [Parameter(Mandatory)]
+    [string] $Label
+  )
+
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if (-not $item) {
+    Write-PwshProfileStatus -Stage 'Reset' -Type Current -Message "$Label not found: $Path"
+    return 'Absent'
+  }
+
+  try {
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+      Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } elseif ($item.PSIsContainer) {
+      Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    } else {
+      Remove-Item -LiteralPath $Path -Force -ErrorAction Stop
+    }
+    Write-PwshProfileStatus -Stage 'Reset' -Type Success -Message "$Label removed: $Path"
+    'Removed'
+  } catch {
+    Write-PwshProfileStatus -Stage 'Reset' -Type Warning -Message "Could not remove $Label '$Path': $($_.Exception.Message)"
+    'Failed'
+  }
+}
+
+function Invoke-PwshProfileReset {
+  [CmdletBinding()]
+  param (
+    [switch] $SkipConfirmation,
+
+    [object] $Targets = (Get-PwshProfileResetTargets)
+  )
+
+  Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'DESTRUCTIVE Profile Reset'
+  Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'RESET WILL PERMANENTLY DELETE BOTH USER POWERSHELL CONFIGURATION FOLDERS.'
+  Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'ALL user-installed PowerShell modules, profiles, profile backups, and symbolic links in those folders will be removed.'
+  Write-PwshProfileStatus -Stage 'WARNING' -Type Danger -Message 'The local PwshProfile store, installer state, and legacy quick-term-cloud theme copies will also be removed.'
+  Write-PwshProfileStatus -Stage 'Backup' -Type Warning -Message 'Take a backup of anything you need before continuing.'
+  Write-PwshProfileStatus -Stage 'Retained' -Type Current -Message 'Oh My Posh, Winget applications, Windows Terminal settings, and system-wide PowerShell modules will not be uninstalled.'
+
+  if (-not $SkipConfirmation) {
+    Write-Host ''
+    Write-PwshProfileStatus -Stage 'Confirm' -Type Action -Message 'Press any key to start the reset, or press Ctrl+C to cancel.'
+    try {
+      $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    } catch {
+      $confirmation = Read-Host -Prompt "Raw key input is unavailable. Type RESET to continue"
+      if ($confirmation -cne 'RESET') {
+        Write-PwshProfileStatus -Stage 'Reset' -Type Warning -Message 'Reset cancelled.'
+        return
+      }
+    }
+  }
+
+  Write-Host ''
+  Write-PwshProfileStatus -Stage 'Reset' -Type Action -Message 'Removing PowerShell profile and module artifacts...'
+  $results = [System.Collections.Generic.List[string]]::new()
+
+  # Remove links first so neither PowerShell directory can lead into the other while deleting.
+  $powerShellRootItems = @(
+    foreach ($root in @($Targets.PowerShellRoots)) {
+      [pscustomobject]@{
+        Path = $root
+        Item = Get-Item -LiteralPath $root -Force -ErrorAction SilentlyContinue
+      }
+    }
+  )
+  foreach ($target in @($powerShellRootItems | Where-Object { $_.Item -and ($_.Item.Attributes -band [IO.FileAttributes]::ReparsePoint) })) {
+    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell link'))
+  }
+  foreach ($target in @($powerShellRootItems | Where-Object { -not $_.Item -or -not ($_.Item.Attributes -band [IO.FileAttributes]::ReparsePoint) })) {
+    $results.Add((Remove-PwshProfileResetItem -Path $target.Path -Label 'PowerShell configuration'))
+  }
+
+  $results.Add((Remove-PwshProfileResetItem -Path $Targets.LocalStore -Label 'Local profile store'))
+  foreach ($legacyThemePath in @($Targets.LegacyThemes)) {
+    $results.Add((Remove-PwshProfileResetItem -Path $legacyThemePath -Label 'Legacy Oh My Posh theme'))
+  }
+  $results.Add((Remove-PwshProfileResetItem -Path $Targets.StateRegistry -Label 'Installer registry state'))
+
+  $removedCount = @($results | Where-Object { $_ -eq 'Removed' }).Count
+  $absentCount = @($results | Where-Object { $_ -eq 'Absent' }).Count
+  $failedCount = @($results | Where-Object { $_ -eq 'Failed' }).Count
+  $summaryType = if ($failedCount -gt 0) { 'Warning' } else { 'Success' }
+  Write-PwshProfileStatus -Stage 'Complete' -Type $summaryType -Message "Reset complete: $removedCount removed, $absentCount already absent, $failedCount failed."
+  Write-PwshProfileStatus -Stage 'Next' -Type Action -Message 'Close PowerShell, open a new session, and run the installer again for a clean setup.'
+}
+
+if ($Reset) {
+  Invoke-PwshProfileReset
+  return
+}
+
+if (-not $nerdFontName) {
+  throw "NerdFontName is required unless -Reset is specified. Run 'Get-Help $PSCommandPath -Detailed' for usage."
 }
 
 if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {

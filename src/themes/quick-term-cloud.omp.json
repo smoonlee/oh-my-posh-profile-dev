@@ -87,14 +87,8 @@
           "leading_diamond": "\ue0b6",
           "invert_powerline": true,
           "foreground": "#ffffff",
-          "background": "#238636",
-          "background_templates": [
-            "{{ if .Error }}#da3633{{ end }}"
-          ],
-          "template": " {{ if eq .Code 0 }}\uf00c{{ else }}\uf071 {{ .Code }}{{ end }} ",
-          "options": {
-            "always_enabled": true
-          }
+          "background": "#da3633",
+          "template": " \uf071 {{ .Code }} "
         },
         {
           "type": "executiontime",

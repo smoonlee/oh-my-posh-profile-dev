@@ -40,6 +40,15 @@
           }
         },
         {
+          "type": "root",
+          "style": "diamond",
+          "leading_diamond": "\ue0b6",
+          "trailing_diamond": "\ue0b4",
+          "foreground": "#ffffff",
+          "background": "#da3633",
+          "template": " \uf071 ELEVATED "
+        },
+        {
           "type": "path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",

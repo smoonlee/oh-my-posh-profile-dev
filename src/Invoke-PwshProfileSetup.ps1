@@ -2512,10 +2512,29 @@ function Invoke-PwshProfileUpdate {
     Write-PwshProfileStatus -Stage 'Next' -Message 'Restore the tracked files or run the Profile setup phase to intentionally establish a new baseline.'
     return $false
   }
-  if (-not $Bootstrap -and
-    (Compare-PwshProfileSemanticVersion -Left $latestVersionText -Right $currentVersion) -le 0) {
-    Write-PwshProfileStatus -Stage 'Update' -Type Current -Message 'Already up to date.'
-    return $true
+  if (-not $Bootstrap) {
+    $versionComparison = Compare-PwshProfileSemanticVersion `
+      -Left $latestVersionText `
+      -Right $currentVersion
+    $missingBaselineArtifacts = @(
+      $destinations.Keys | Where-Object {
+        -not $installed.artifacts.PSObject.Properties[$_]
+      }
+    )
+
+    if ($versionComparison -lt 0 -or
+      ($versionComparison -eq 0 -and $missingBaselineArtifacts.Count -eq 0)) {
+      Write-PwshProfileStatus -Stage 'Update' -Type Current -Message 'Already up to date.'
+      Write-Host ''
+      return $true
+    }
+
+    if ($versionComparison -eq 0) {
+      Write-PwshProfileStatus `
+        -Stage 'Repair' `
+        -Type Action `
+        -Message "Restoring $($missingBaselineArtifacts.Count) newly tracked release asset(s)..."
+    }
   }
 
   $releaseAssets = @{}

@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.7.1'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.8'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -265,7 +265,9 @@ function global:Set-PwshProfile {
     [switch] $EnableEndOfLife,
 
     [Parameter(ParameterSetName = 'AzureKubernetes')]
-    [switch] $EnableAzureKubernetes
+    [switch] $EnableAzureKubernetes,
+
+    [switch] $PassThru
   )
 
   if (-not $PSBoundParameters.ContainsKey('EnableReleaseUpdate') -and
@@ -283,6 +285,8 @@ function global:Set-PwshProfile {
   $useNetworkCidr = [bool]$current.EnableNetworkCidr
   $useEndOfLife = [bool]$current.EnableEndOfLife
   $useAzureKubernetes = [bool]$current.EnableAzureKubernetes
+  $changedModuleName = $null
+  $changedModuleEnabled = $false
   if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
     $usePrerelease = $false
   }
@@ -291,15 +295,23 @@ function global:Set-PwshProfile {
   }
   elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
     $usePublicIP = [bool]$EnablePublicIP
+    $changedModuleName = 'PwshProfile.PublicIP'
+    $changedModuleEnabled = $usePublicIP
   }
   elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
     $useNetworkCidr = [bool]$EnableNetworkCidr
+    $changedModuleName = 'PwshProfile.NetworkCidr'
+    $changedModuleEnabled = $useNetworkCidr
   }
   elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
     $useEndOfLife = [bool]$EnableEndOfLife
+    $changedModuleName = 'PwshProfile.EndOfLife'
+    $changedModuleEnabled = $useEndOfLife
   }
   else {
     $useAzureKubernetes = [bool]$EnableAzureKubernetes
+    $changedModuleName = 'PwshProfile.AzureKubernetes'
+    $changedModuleEnabled = $useAzureKubernetes
   }
   $configPath = $current.ConfigPath
   $configDirectory = Split-Path -Path $configPath -Parent
@@ -352,23 +364,32 @@ function global:Set-PwshProfile {
     $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
     Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
   }
-  elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
-    $moduleState = if ($usePublicIP) { 'enabled' } else { 'disabled' }
-    Write-Host "Pwsh Profile PublicIP module $moduleState. Reload the profile to apply the change."
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
-    $moduleState = if ($useNetworkCidr) { 'enabled' } else { 'disabled' }
-    Write-Host "Pwsh Profile NetworkCidr module $moduleState. Reload the profile to apply the change."
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
-    $moduleState = if ($useEndOfLife) { 'enabled' } else { 'disabled' }
-    Write-Host "Pwsh Profile EndOfLife module $moduleState. Reload the profile to apply the change."
-  }
   else {
-    $moduleState = if ($useAzureKubernetes) { 'enabled' } else { 'disabled' }
-    Write-Host "Pwsh Profile AzureKubernetes module $moduleState. Reload the profile to apply the change."
+    $moduleDisplayName = $changedModuleName -replace '^PwshProfile\.', ''
+    if ($changedModuleEnabled) {
+      $modulePath = Join-Path $env:APPDATA "PwshProfile\modules\$changedModuleName\$changedModuleName.psd1"
+      if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+        Write-Warning "The enabled $changedModuleName module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
+      }
+      else {
+        try {
+          Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
+          Write-Host "Pwsh Profile $moduleDisplayName module enabled and loaded."
+        }
+        catch {
+          Write-Warning "Pwsh Profile $moduleDisplayName module was enabled but could not be loaded. $($_.Exception.Message)"
+        }
+      }
+    }
+    else {
+      Remove-Module -Name $changedModuleName -Force -ErrorAction Ignore
+      Write-Host "Pwsh Profile $moduleDisplayName module disabled and unloaded."
+    }
   }
-  Get-PwshProfile
+
+  if ($PassThru) {
+    Get-PwshProfile
+  }
 }
 
 function global:Get-PwshProfileVersion {

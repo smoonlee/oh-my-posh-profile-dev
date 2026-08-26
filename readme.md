@@ -235,12 +235,14 @@ Custom functions live under `src/modules` and are installed as tracked profile
 assets. They are disabled by default and load only when enabled through
 `Set-PwshProfile`. Use `Get-PwshProfile` to view `OptionalModules`,
 `EnabledModules`, `DisabledModules`, and `ModulesAvailableForUpdate`.
+Module changes apply immediately in the current session. `Set-PwshProfile`
+prints only a concise confirmation by default; add `-PassThru` to return the
+complete updated profile state.
 
-Enable the sample PublicIP module and reload the profile:
+Enable the sample PublicIP module:
 
 ```powershell
 Set-PwshProfile -EnablePublicIP
-. $PROFILE
 Get-PublicIP
 ```
 
@@ -253,11 +255,10 @@ and returns a reusable object containing `Public IP`, `Host Name`, `ISP`, `City`
 Set-PwshProfile -EnablePublicIP:$false
 ```
 
-Enable the NetworkCidr module and reload the profile:
+Enable the NetworkCidr module:
 
 ```powershell
 Set-PwshProfile -EnableNetworkCidr
-. $PROFILE
 Get-NetworkCidr -Cidr 10.20.0.0/24 -Provider Azure | Format-List
 ```
 
@@ -292,11 +293,10 @@ Disable the module with:
 Set-PwshProfile -EnableNetworkCidr:$false
 ```
 
-Enable the EndOfLife module and reload the profile:
+Enable the EndOfLife module:
 
 ```powershell
 Set-PwshProfile -EnableEndOfLife
-. $PROFILE
 Get-EolInfo -ProductName powershell -ActiveSupport
 ```
 
@@ -311,11 +311,10 @@ products are added or removed. Disable the module with:
 Set-PwshProfile -EnableEndOfLife:$false
 ```
 
-Enable the AzureKubernetes module and reload the profile:
+Enable the AzureKubernetes module:
 
 ```powershell
 Set-PwshProfile -EnableAzureKubernetes
-. $PROFILE
 Get-AksVersion -Location australiaeast
 ```
 

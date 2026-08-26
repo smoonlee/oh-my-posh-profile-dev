@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.8] - 2026-08-26
+
+### Optional module configuration
+
+- Load newly enabled optional modules and unload disabled modules immediately in
+  the current session without requiring a profile reload.
+- Keep `Set-PwshProfile` output concise by default and add `-PassThru` for the
+  complete updated profile state.
+
 ## [4.0.0-pre-release-0.7.1] - 2026-08-26
 
 ### Update output
@@ -176,7 +185,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7.1...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.8...HEAD
+[4.0.0-pre-release-0.8]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7.1...v4.0.0-pre-release-0.8
 [4.0.0-pre-release-0.7.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7...v4.0.0-pre-release-0.7.1
 [4.0.0-pre-release-0.7]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.6...v4.0.0-pre-release-0.7
 [4.0.0-pre-release-0.6]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.5...v4.0.0-pre-release-0.6

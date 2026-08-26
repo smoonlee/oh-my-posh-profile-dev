@@ -7,6 +7,46 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [4.0.0-pre-release-0.7] - 2026-08-26
+
+### Optional module status
+
+- Show enabled, disabled, and updateable optional modules in `Get-PwshProfile`.
+- Add `OptionalModules` details with each module's enabled state, installed
+  manifest version, bundle version, latest bundle version, and update flag.
+- Provide comment-based `Get-Help` documentation for every exported optional
+  module command, including parameter descriptions and examples.
+
+### Azure Kubernetes module
+
+- Add a disabled-by-default `PwshProfile.AzureKubernetes` module with
+  `Get-AksVersion` for structured, region-specific AKS Kubernetes version queries.
+- Exclude preview versions by default, support explicit Azure CLI subscription
+  selection, and provide an opt-in AKS release tracker shortcut.
+- Add `Set-PwshProfile -EnableAzureKubernetes` and track the module through
+  local and immutable release installation.
+
+### Network CIDR module
+
+- Add a disabled-by-default `PwshProfile.NetworkCidr` module with
+  `Get-NetworkCidr` for Standard, Azure, AWS, and GCP IPv4 subnet calculations.
+- Normalize host addresses to their network, model provider-reserved addresses,
+  handle `/31` and `/32`, report provider prefix constraints, and split networks
+  safely with `-SplitPrefix` and `-MaxSubnets`.
+- Add count-based equal subnetting with `-SubnetCount` and efficient zero-based
+  child selection with `-SubnetIndex`.
+
+### EndOfLife module
+
+- Add a disabled-by-default `PwshProfile.EndOfLife` module with `Get-EolInfo`
+  for querying endoflife.date lifecycle data, including active-support and LTS
+  filters.
+- Generate the EndOfLife product `ValidateSet` from `EndOfLifeProducts.json`
+  and add a scheduled GitHub Action that refreshes it from endoflife.date.
+- Include the EndOfLife module in tracked local and release profile assets.
+- Add `Set-PwshProfile -EnableEndOfLife` while preserving OTA and other module
+  settings, and track both module files through local and release installation.
+
 ## [4.0.0-pre-release-0.6] - 2026-08-26
 
 ### Update guidance
@@ -128,7 +168,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.6...HEAD
+[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7...HEAD
+[4.0.0-pre-release-0.7]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.6...v4.0.0-pre-release-0.7
 [4.0.0-pre-release-0.6]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.5...v4.0.0-pre-release-0.6
 [4.0.0-pre-release-0.5]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.4...v4.0.0-pre-release-0.5
 [4.0.0-pre-release-0.4]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.3...v4.0.0-pre-release-0.4

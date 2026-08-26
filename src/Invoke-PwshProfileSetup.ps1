@@ -2175,6 +2175,12 @@ function Install-PwshProfileLocalSource {
     setup = Join-Path $sourceRootPath 'Invoke-PwshProfileSetup.ps1'
     publicIPManifest = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
     publicIPScript = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
+    networkCidrManifest = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
+    networkCidrScript = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    endOfLifeManifest = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
+    endOfLifeScript = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    azureKubernetesManifest = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
+    azureKubernetesScript = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
   }
   foreach ($name in $sourcePaths.Keys) {
     if (-not (Test-Path -LiteralPath $sourcePaths[$name] -PathType Leaf)) {
@@ -2195,6 +2201,12 @@ function Install-PwshProfileLocalSource {
     setup = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
     publicIPManifest = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
     publicIPScript = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
+    networkCidrManifest = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
+    networkCidrScript = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    endOfLifeManifest = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
+    endOfLifeScript = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    azureKubernetesManifest = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
+    azureKubernetesScript = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
   }
 
   Write-PwshProfileStatus -Stage $operation -Type Warning -Message 'Development mode: release metadata and remote asset verification are intentionally bypassed.'
@@ -2206,6 +2218,12 @@ function Install-PwshProfileLocalSource {
     Test-PwshProfileScriptFile -Path $sourcePaths.setup -Label 'Local setup script'
     Test-PwshProfileScriptFile -Path $sourcePaths.publicIPScript -Label 'Local PublicIP module'
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.publicIPManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $sourcePaths.networkCidrScript -Label 'Local NetworkCidr module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.networkCidrManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $sourcePaths.endOfLifeScript -Label 'Local EndOfLife module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.endOfLifeManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $sourcePaths.azureKubernetesScript -Label 'Local AzureKubernetes module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.azureKubernetesManifest -ErrorAction Stop
     $null = Get-Content -LiteralPath $sourcePaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $sourcePaths.profile -Raw -ErrorAction Stop
@@ -2225,6 +2243,12 @@ function Install-PwshProfileLocalSource {
     setup = 'Invoke-PwshProfileSetup.ps1'
     publicIPManifest = 'PwshProfile.PublicIP.psd1'
     publicIPScript = 'PwshProfile.PublicIP.psm1'
+    networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
+    networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
+    endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
+    endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
+    azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
+    azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
   }
   $artifactHashes = [ordered]@{}
   foreach ($name in $artifactNames.Keys) {
@@ -2366,12 +2390,24 @@ function Invoke-PwshProfileUpdate {
   $setupPath = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
   $publicIPManifestPath = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
   $publicIPScriptPath = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
+  $networkCidrManifestPath = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
+  $networkCidrScriptPath = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+  $endOfLifeManifestPath = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
+  $endOfLifeScriptPath = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+  $azureKubernetesManifestPath = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
+  $azureKubernetesScriptPath = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
   $destinations = [ordered]@{
     profile = $profilePath
     theme = $themePath
     setup = $setupPath
     publicIPManifest = $publicIPManifestPath
     publicIPScript = $publicIPScriptPath
+    networkCidrManifest = $networkCidrManifestPath
+    networkCidrScript = $networkCidrScriptPath
+    endOfLifeManifest = $endOfLifeManifestPath
+    endOfLifeScript = $endOfLifeScriptPath
+    azureKubernetesManifest = $azureKubernetesManifestPath
+    azureKubernetesScript = $azureKubernetesScriptPath
   }
 
   $installed = $null
@@ -2519,6 +2555,12 @@ function Invoke-PwshProfileUpdate {
     setup = 'Invoke-PwshProfileSetup.ps1'
     publicIPManifest = 'PwshProfile.PublicIP.psd1'
     publicIPScript = 'PwshProfile.PublicIP.psm1'
+    networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
+    networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
+    endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
+    endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
+    azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
+    azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
   }
   $stagedPaths = @{}
   try {
@@ -2550,6 +2592,12 @@ function Invoke-PwshProfileUpdate {
     Test-PwshProfileScriptFile -Path $stagedPaths.setup -Label 'Setup script'
     Test-PwshProfileScriptFile -Path $stagedPaths.publicIPScript -Label 'PublicIP module'
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.publicIPManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $stagedPaths.networkCidrScript -Label 'NetworkCidr module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.networkCidrManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $stagedPaths.endOfLifeScript -Label 'EndOfLife module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.endOfLifeManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $stagedPaths.azureKubernetesScript -Label 'AzureKubernetes module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.azureKubernetesManifest -ErrorAction Stop
     $null = Get-Content -LiteralPath $stagedPaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $stagedPaths.profile -Raw -ErrorAction Stop

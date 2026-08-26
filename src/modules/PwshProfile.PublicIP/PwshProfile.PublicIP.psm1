@@ -7,6 +7,10 @@ function Get-PublicIP {
       Queries ipinfo.io over HTTPS and returns an object containing the public
       IP address, hostname, ISP, city, region, and country.
 
+    .PARAMETER TimeoutSec
+      Maximum number of seconds to wait for the ipinfo.io request. The default
+      is three seconds.
+
   .EXAMPLE
       Get-PublicIP
 

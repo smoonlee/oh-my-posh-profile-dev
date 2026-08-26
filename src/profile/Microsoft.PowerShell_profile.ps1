@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.6'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.7'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -80,15 +80,22 @@ function global:Get-PwshProfile {
     [switch] $SettingsOnly
   )
 
-  $configPath = Join-Path $env:APPDATA 'PwshProfile\config\settings.json'
+  $storePath = Join-Path $env:APPDATA 'PwshProfile'
+  $configPath = Join-Path $storePath 'config\settings.json'
   $enablePreReleaseUpdate = $false
   $enablePublicIP = $false
+  $enableNetworkCidr = $false
+  $enableEndOfLife = $false
+  $enableAzureKubernetes = $false
   if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     try {
       $settings = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop |
         ConvertFrom-Json -ErrorAction Stop
       $enablePreReleaseUpdate = [bool]$settings.enablePreReleaseUpdate
       $enablePublicIP = [bool]$settings.enablePublicIP
+      $enableNetworkCidr = [bool]$settings.enableNetworkCidr
+      $enableEndOfLife = [bool]$settings.enableEndOfLife
+      $enableAzureKubernetes = [bool]$settings.enableAzureKubernetes
     }
     catch {
       Write-Warning "Ignoring invalid Pwsh Profile settings at '$configPath'."
@@ -134,6 +141,72 @@ function global:Get-PwshProfile {
     }
   }
 
+  $optionalModules = @(
+    [pscustomobject]@{
+      Name = 'PwshProfile.PublicIP'
+      Enabled = $enablePublicIP
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.NetworkCidr'
+      Enabled = $enableNetworkCidr
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.EndOfLife'
+      Enabled = $enableEndOfLife
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.AzureKubernetes'
+      Enabled = $enableAzureKubernetes
+    }
+  )
+  $selectedRemoteVersion = if ($enablePreReleaseUpdate) {
+    $previewVersion
+  }
+  else {
+    $stableVersion
+  }
+  $moduleUpdateAvailable = $false
+  if ($selectedRemoteVersion) {
+    try {
+      $moduleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
+        -Left $selectedRemoteVersion `
+        -Right $global:PwshProfileVersion) -gt 0
+    }
+    catch {
+      $moduleUpdateAvailable = $false
+    }
+  }
+
+  $moduleStatuses = @(
+    foreach ($module in $optionalModules) {
+      $modulePath = Join-Path $storePath "modules\$($module.Name)\$($module.Name).psd1"
+      $moduleVersion = $null
+      $moduleInstalled = Test-Path -LiteralPath $modulePath -PathType Leaf
+      if ($moduleInstalled) {
+        try {
+          $moduleManifest = Import-PowerShellDataFile -LiteralPath $modulePath -ErrorAction Stop
+          if ($moduleManifest.ModuleVersion) {
+            $moduleVersion = [string]$moduleManifest.ModuleVersion
+          }
+        }
+        catch {
+          $moduleVersion = 'Invalid manifest'
+        }
+      }
+
+      [pscustomobject]@{
+        Name = $module.Name
+        Enabled = [bool]$module.Enabled
+        Installed = $moduleInstalled
+        ModuleVersion = $moduleVersion
+        BundleVersion = $global:PwshProfileVersion
+        LatestBundleVersion = $selectedRemoteVersion
+        UpdateAvailable = $moduleUpdateAvailable
+        Path = $modulePath
+      }
+    }
+  )
+
   [pscustomobject]@{
     LocalVersion = $global:PwshProfileVersion
     StableVersion = if ($stableVersion) {
@@ -156,7 +229,19 @@ function global:Get-PwshProfile {
     }
     EnablePreReleaseUpdate = $enablePreReleaseUpdate
     EnablePublicIP = $enablePublicIP
+    EnableNetworkCidr = $enableNetworkCidr
+    EnableEndOfLife = $enableEndOfLife
+    EnableAzureKubernetes = $enableAzureKubernetes
     UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
+    OptionalModules = $moduleStatuses
+    EnabledModules = @($moduleStatuses | Where-Object Enabled | Select-Object -ExpandProperty Name)
+    DisabledModules = @($moduleStatuses | Where-Object { -not $_.Enabled } | Select-Object -ExpandProperty Name)
+    ModulesAvailableForUpdate = if ($moduleUpdateAvailable) {
+      @($moduleStatuses | Select-Object -ExpandProperty Name)
+    }
+    else {
+      @()
+    }
     ConfigPath = $configPath
   }
 }
@@ -171,26 +256,50 @@ function global:Set-PwshProfile {
     [switch] $EnablePreReleaseUpdate,
 
     [Parameter(ParameterSetName = 'PublicIP')]
-    [switch] $EnablePublicIP
+    [switch] $EnablePublicIP,
+
+    [Parameter(ParameterSetName = 'NetworkCidr')]
+    [switch] $EnableNetworkCidr,
+
+    [Parameter(ParameterSetName = 'EndOfLife')]
+    [switch] $EnableEndOfLife,
+
+    [Parameter(ParameterSetName = 'AzureKubernetes')]
+    [switch] $EnableAzureKubernetes
   )
 
   if (-not $PSBoundParameters.ContainsKey('EnableReleaseUpdate') -and
     -not $PSBoundParameters.ContainsKey('EnablePreReleaseUpdate') -and
-    -not $PSBoundParameters.ContainsKey('EnablePublicIP')) {
+    -not $PSBoundParameters.ContainsKey('EnablePublicIP') -and
+    -not $PSBoundParameters.ContainsKey('EnableNetworkCidr') -and
+    -not $PSBoundParameters.ContainsKey('EnableEndOfLife') -and
+    -not $PSBoundParameters.ContainsKey('EnableAzureKubernetes')) {
     return Get-PwshProfile
   }
 
   $current = Get-PwshProfile -SettingsOnly
   $usePrerelease = [bool]$current.EnablePreReleaseUpdate
   $usePublicIP = [bool]$current.EnablePublicIP
+  $useNetworkCidr = [bool]$current.EnableNetworkCidr
+  $useEndOfLife = [bool]$current.EnableEndOfLife
+  $useAzureKubernetes = [bool]$current.EnableAzureKubernetes
   if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
     $usePrerelease = $false
   }
   elseif ($PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
     $usePrerelease = [bool]$EnablePreReleaseUpdate
   }
-  else {
+  elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
     $usePublicIP = [bool]$EnablePublicIP
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
+    $useNetworkCidr = [bool]$EnableNetworkCidr
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
+    $useEndOfLife = [bool]$EnableEndOfLife
+  }
+  else {
+    $useAzureKubernetes = [bool]$EnableAzureKubernetes
   }
   $configPath = $current.ConfigPath
   $configDirectory = Split-Path -Path $configPath -Parent
@@ -199,9 +308,12 @@ function global:Set-PwshProfile {
   }
 
   $settings = [ordered]@{
-    schemaVersion = 2
+    schemaVersion = 4
     enablePreReleaseUpdate = $usePrerelease
     enablePublicIP = $usePublicIP
+    enableNetworkCidr = $useNetworkCidr
+    enableEndOfLife = $useEndOfLife
+    enableAzureKubernetes = $useAzureKubernetes
     updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
   }
   $temporaryPath = "$configPath.$PID.tmp"
@@ -240,9 +352,21 @@ function global:Set-PwshProfile {
     $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
     Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
   }
-  else {
+  elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
     $moduleState = if ($usePublicIP) { 'enabled' } else { 'disabled' }
     Write-Host "Pwsh Profile PublicIP module $moduleState. Reload the profile to apply the change."
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
+    $moduleState = if ($useNetworkCidr) { 'enabled' } else { 'disabled' }
+    Write-Host "Pwsh Profile NetworkCidr module $moduleState. Reload the profile to apply the change."
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
+    $moduleState = if ($useEndOfLife) { 'enabled' } else { 'disabled' }
+    Write-Host "Pwsh Profile EndOfLife module $moduleState. Reload the profile to apply the change."
+  }
+  else {
+    $moduleState = if ($useAzureKubernetes) { 'enabled' } else { 'disabled' }
+    Write-Host "Pwsh Profile AzureKubernetes module $moduleState. Reload the profile to apply the change."
   }
   Get-PwshProfile
 }
@@ -319,22 +443,42 @@ function Import-PwshProfileModules {
     Import-Module -Name $moduleName -Global -ErrorAction Ignore
   }
 
-  if (-not $Settings.EnablePublicIP) {
-    Remove-Module -Name 'PwshProfile.PublicIP' -Force -ErrorAction Ignore
-    return
-  }
+  $optionalModules = @(
+    [pscustomobject]@{
+      Name = 'PwshProfile.PublicIP'
+      Enabled = [bool]$Settings.EnablePublicIP
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.NetworkCidr'
+      Enabled = [bool]$Settings.EnableNetworkCidr
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.EndOfLife'
+      Enabled = [bool]$Settings.EnableEndOfLife
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.AzureKubernetes'
+      Enabled = [bool]$Settings.EnableAzureKubernetes
+    }
+  )
+  foreach ($module in $optionalModules) {
+    if (-not $module.Enabled) {
+      Remove-Module -Name $module.Name -Force -ErrorAction Ignore
+      continue
+    }
 
-  $modulePath = Join-Path $script:PwshProfileStorePath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
-  if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
-    Write-Warning "The enabled PwshProfile.PublicIP module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
-    return
-  }
+    $modulePath = Join-Path $script:PwshProfileStorePath "modules\$($module.Name)\$($module.Name).psd1"
+    if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
+      Write-Warning "The enabled $($module.Name) module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
+      continue
+    }
 
-  try {
-    Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
-  }
-  catch {
-    Write-Warning "Could not import the enabled PwshProfile.PublicIP module. $($_.Exception.Message)"
+    try {
+      Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
+    }
+    catch {
+      Write-Warning "Could not import the enabled $($module.Name) module. $($_.Exception.Message)"
+    }
   }
 }
 

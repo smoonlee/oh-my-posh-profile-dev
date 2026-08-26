@@ -43,6 +43,12 @@ jobs:
           $setupPath = './src/Invoke-PwshProfileSetup.ps1'
           $publicIPManifestPath = './src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psd1'
           $publicIPScriptPath = './src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psm1'
+          $networkCidrManifestPath = './src/modules/PwshProfile.NetworkCidr/PwshProfile.NetworkCidr.psd1'
+          $networkCidrScriptPath = './src/modules/PwshProfile.NetworkCidr/PwshProfile.NetworkCidr.psm1'
+          $endOfLifeManifestPath = './src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psd1'
+          $endOfLifeScriptPath = './src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psm1'
+          $azureKubernetesManifestPath = './src/modules/PwshProfile.AzureKubernetes/PwshProfile.AzureKubernetes.psd1'
+          $azureKubernetesScriptPath = './src/modules/PwshProfile.AzureKubernetes/PwshProfile.AzureKubernetes.psm1'
           $catalogPath = './NerdFontsCatalog.json'
           $changelogPath = './CHANGELOG.md'
           $profileContent = Get-Content -LiteralPath $profilePath -Raw
@@ -61,7 +67,7 @@ jobs:
           if (-not $catalog.NerdFontsVersion -or @($catalog.Fonts).Count -eq 0) {
             throw 'NerdFontsCatalog.json is missing NerdFontsVersion or font entries.'
           }
-          foreach ($scriptPath in @($profilePath, $setupPath, $publicIPScriptPath)) {
+          foreach ($scriptPath in @($profilePath, $setupPath, $publicIPScriptPath, $networkCidrScriptPath, $endOfLifeScriptPath, $azureKubernetesScriptPath)) {
             $tokens = $null
             $parseErrors = $null
             [void][System.Management.Automation.Language.Parser]::ParseFile(
@@ -74,6 +80,9 @@ jobs:
             }
           }
           $null = Import-PowerShellDataFile -LiteralPath $publicIPManifestPath -ErrorAction Stop
+          $null = Import-PowerShellDataFile -LiteralPath $networkCidrManifestPath -ErrorAction Stop
+          $null = Import-PowerShellDataFile -LiteralPath $endOfLifeManifestPath -ErrorAction Stop
+          $null = Import-PowerShellDataFile -LiteralPath $azureKubernetesManifestPath -ErrorAction Stop
 
           $assetRoot = Join-Path $env:RUNNER_TEMP 'pwsh-profile-release'
           New-Item -ItemType Directory -Path $assetRoot -Force | Out-Null
@@ -97,6 +106,30 @@ jobs:
             publicIPScript = [ordered]@{
               asset = 'PwshProfile.PublicIP.psm1'
               source = 'src/modules/PwshProfile.PublicIP/PwshProfile.PublicIP.psm1'
+            }
+            networkCidrManifest = [ordered]@{
+              asset = 'PwshProfile.NetworkCidr.psd1'
+              source = 'src/modules/PwshProfile.NetworkCidr/PwshProfile.NetworkCidr.psd1'
+            }
+            networkCidrScript = [ordered]@{
+              asset = 'PwshProfile.NetworkCidr.psm1'
+              source = 'src/modules/PwshProfile.NetworkCidr/PwshProfile.NetworkCidr.psm1'
+            }
+            endOfLifeManifest = [ordered]@{
+              asset = 'PwshProfile.EndOfLife.psd1'
+              source = 'src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psd1'
+            }
+            endOfLifeScript = [ordered]@{
+              asset = 'PwshProfile.EndOfLife.psm1'
+              source = 'src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psm1'
+            }
+            azureKubernetesManifest = [ordered]@{
+              asset = 'PwshProfile.AzureKubernetes.psd1'
+              source = 'src/modules/PwshProfile.AzureKubernetes/PwshProfile.AzureKubernetes.psd1'
+            }
+            azureKubernetesScript = [ordered]@{
+              asset = 'PwshProfile.AzureKubernetes.psm1'
+              source = 'src/modules/PwshProfile.AzureKubernetes/PwshProfile.AzureKubernetes.psm1'
             }
             catalog = [ordered]@{
               asset = 'NerdFontsCatalog.json'
@@ -137,5 +170,11 @@ jobs:
             (Join-Path $env:assetRoot 'Invoke-PwshProfileSetup.ps1') `
             (Join-Path $env:assetRoot 'PwshProfile.PublicIP.psd1') `
             (Join-Path $env:assetRoot 'PwshProfile.PublicIP.psm1') `
+            (Join-Path $env:assetRoot 'PwshProfile.NetworkCidr.psd1') `
+            (Join-Path $env:assetRoot 'PwshProfile.NetworkCidr.psm1') `
+            (Join-Path $env:assetRoot 'PwshProfile.EndOfLife.psd1') `
+            (Join-Path $env:assetRoot 'PwshProfile.EndOfLife.psm1') `
+            (Join-Path $env:assetRoot 'PwshProfile.AzureKubernetes.psd1') `
+            (Join-Path $env:assetRoot 'PwshProfile.AzureKubernetes.psm1') `
             (Join-Path $env:assetRoot 'NerdFontsCatalog.json') `
             (Join-Path $env:assetRoot 'PwshProfile.release.json')

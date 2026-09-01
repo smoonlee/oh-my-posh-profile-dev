@@ -1,3 +1,23 @@
+function Get-EndOfLifeHttpStatusCode {
+  # Extracts the HTTP status code from an Invoke-RestMethod error, if present.
+  param (
+    [Parameter(Mandatory)]
+    [System.Management.Automation.ErrorRecord] $ErrorRecord
+  )
+
+  $response = $ErrorRecord.Exception.Response
+  if (-not $response) {
+    return $null
+  }
+
+  try {
+    return [int]$response.StatusCode
+  }
+  catch {
+    return $null
+  }
+}
+
 function Test-EndOfLifeDateIsActive {
   [CmdletBinding()]
   param (
@@ -99,18 +119,526 @@ function Get-EolInfo {
   .PARAMETER ApiBaseUri
       Base API URI. Override this for testing; defaults to the public endoflife.date API.
 
+  .PARAMETER ListProducts
+      List all available products from endoflife.date API.
+
+  .PARAMETER Like
+      When used with -ListProducts, filter products by wildcard pattern.
+
   .EXAMPLE
       Get-EolInfo -ProductName powershell
 
   .EXAMPLE
       Get-EolInfo dotnet -ActiveSupport -LtsSupport | Format-Table
+
+  .EXAMPLE
+      Get-EolInfo -ListProducts
+
+  .EXAMPLE
+      Get-EolInfo -ListProducts -Like "*java*"
   #>
-  [CmdletBinding()]
+  [CmdletBinding(DefaultParameterSetName = 'Query')]
   [OutputType([pscustomobject])]
   param (
     # This region is refreshed by scripts/Update-EndOfLifeProducts.ps1.
     # BEGIN GENERATED END-OF-LIFE PRODUCT VALIDATESET
     [ValidateSet(
+      'adonisjs',
+      'akeneo-pim',
+      'alibaba-ack',
+      'alibaba-dragonwell',
+      'almalinux',
+      'alpine-linux',
+      'amazon-aurora-mysql',
+      'amazon-aurora-postgresql',
+      'amazon-cdk',
+      'amazon-corretto',
+      'amazon-documentdb',
+      'amazon-eks',
+      'amazon-elasticache-redis',
+      'amazon-glue',
+      'amazon-linux',
+      'amazon-mq-activemq',
+      'amazon-mq-rabbitmq',
+      'amazon-msk',
+      'amazon-neptune',
+      'amazon-opensearch',
+      'amazon-rds-mariadb',
+      'amazon-rds-mysql',
+      'amazon-rds-postgresql',
+      'android',
+      'angular',
+      'angularjs',
+      'ansible',
+      'ansible-core',
+      'ant',
+      'antix',
+      'apache-activemq',
+      'apache-airflow',
+      'apache-apisix',
+      'apache-artemis',
+      'apache-camel',
+      'apache-cassandra',
+      'apache-celeborn',
+      'apache-couchdb',
+      'apache-flink',
+      'apache-groovy',
+      'apache-hadoop',
+      'apache-hop',
+      'apache-http-server',
+      'apache-kafka',
+      'apache-lucene',
+      'apache-maven',
+      'apache-nifi',
+      'apache-pulsar',
+      'apache-spark',
+      'apache-struts',
+      'apache-subversion',
+      'api-platform',
+      'apple-watch',
+      'arangodb',
+      'argo-cd',
+      'argo-workflows',
+      'artifactory',
+      'authentik',
+      'aws-lambda',
+      'azul-zulu',
+      'azure-database-for-mysql',
+      'azure-database-for-postgresql',
+      'azure-devops-server',
+      'azure-kubernetes-service',
+      'backdrop',
+      'bamboo',
+      'bazel',
+      'beats',
+      'behat',
+      'bellsoft-liberica',
+      'big-ip',
+      'bigbluebutton',
+      'bitbucket',
+      'bitcoin-core',
+      'blender',
+      'bootstrap',
+      'boundary',
+      'bun',
+      'cachet',
+      'caddy',
+      'cakephp',
+      'calico',
+      'centos',
+      'centos-stream',
+      'centreon',
+      'cert-manager',
+      'cfengine',
+      'checkmk',
+      'chef-infra-client',
+      'chef-infra-server',
+      'chef-inspec',
+      'chef-supermarket',
+      'chef-workstation',
+      'chrome',
+      'cilium',
+      'cisco-ios-xe',
+      'citrix-vad',
+      'ckeditor',
+      'clamav',
+      'claude',
+      'clear-linux',
+      'clickhouse',
+      'cloud-sql-auth-proxy',
+      'cnspec',
+      'cockroachdb',
+      'coder',
+      'coldfusion',
+      'commvault',
+      'composer',
+      'concrete-cms',
+      'confluence',
+      'consul',
+      'containerd',
+      'contao',
+      'contour',
+      'controlm',
+      'cortex-xdr',
+      'cos',
+      'couchbase-server',
+      'craft-cms',
+      'dbt-core',
+      'dce',
+      'debian',
+      'deno',
+      'dependency-track',
+      'devuan',
+      'discourse',
+      'django',
+      'docker-engine',
+      'dotnet',
+      'dotnetfx',
+      'dovecot',
+      'dropwizard',
+      'drupal',
+      'drush',
+      'duckdb',
+      'eclipse-jetty',
+      'eclipse-temurin',
+      'elasticsearch',
+      'electron',
+      'elixir',
+      'emberjs',
+      'envoy',
+      'erlang',
+      'eslint',
+      'esxi',
+      'etcd',
+      'eurolinux',
+      'exim',
+      'express',
+      'fairphone',
+      'fedora',
+      'ffmpeg',
+      'filemaker',
+      'firefox',
+      'fluent-bit',
+      'flux',
+      'font-awesome',
+      'foreman',
+      'forgejo',
+      'fortios',
+      'freebsd',
+      'freedesktop-sdk',
+      'gatekeeper',
+      'gerrit',
+      'ghc',
+      'github-actions-runner-images',
+      'gitlab',
+      'gitlab-runner',
+      'gleam',
+      'go',
+      'goaccess',
+      'godot',
+      'google-kubernetes-engine',
+      'google-nexus',
+      'gorilla',
+      'graalvm-ce',
+      'gradle',
+      'grafana',
+      'grafana-loki',
+      'grails',
+      'graylog',
+      'greenlight',
+      'grumphp',
+      'grunt',
+      'gstreamer',
+      'guzzle',
+      'haproxy',
+      'haproxy-ingress',
+      'harbor',
+      'hashicorp-packer',
+      'hashicorp-vault',
+      'hbase',
+      'hibernate-orm',
+      'horizon',
+      'ibm-aix',
+      'ibm-db2',
+      'ibm-i',
+      'ibm-mq',
+      'ibm-semeru-runtime',
+      'icinga',
+      'icinga-web',
+      'idl',
+      'influxdb',
+      'intel-processors',
+      'internet-explorer',
+      'ionic',
+      'ios',
+      'ipad',
+      'ipados',
+      'iphone',
+      'isc-dhcp',
+      'istio',
+      'jaeger',
+      'jekyll',
+      'jenkins',
+      'jhipster',
+      'jira-software',
+      'joomla',
+      'jquery',
+      'jquery-ui',
+      'jreleaser',
+      'jruby',
+      'julia',
+      'karpenter',
+      'kde-plasma',
+      'keda',
+      'keycloak',
+      'kibana',
+      'kindle',
+      'kirby',
+      'knative',
+      'kong-gateway',
+      'kotlin',
+      'kubernetes',
+      'kubernetes-csi-node-driver-registrar',
+      'kubernetes-node-feature-discovery',
+      'kuma',
+      'kyverno',
+      'laravel',
+      'ldap-account-manager',
+      'libreoffice',
+      'lineageos',
+      'linux',
+      'linuxmint',
+      'liquibase',
+      'log4j',
+      'logstash',
+      'longhorn',
+      'looker',
+      'lua',
+      'macos',
+      'mageia',
+      'magento',
+      'mandrel',
+      'mariadb',
+      'mastodon',
+      'matomo',
+      'mattermost',
+      'mautic',
+      'mediawiki',
+      'meilisearch',
+      'memcached',
+      'metallb',
+      'micronaut',
+      'microsoft-build-of-openjdk',
+      'mongodb',
+      'moodle',
+      'motorola-mobility',
+      'msexchange',
+      'mssqlserver',
+      'mulesoft-runtime',
+      'mxlinux',
+      'mysql',
+      'neo4j',
+      'neos',
+      'netapp-ontap',
+      'netbackup-appliance-os',
+      'netbsd',
+      'nextcloud',
+      'nextjs',
+      'nexus',
+      'nginx',
+      'nix',
+      'nixos',
+      'nodejs',
+      'nokia',
+      'nomad',
+      'notepad-plus-plus',
+      'numpy',
+      'nutanix-aos',
+      'nutanix-files',
+      'nutanix-prism',
+      'nuxt',
+      'nvidia',
+      'nvidia-gpu',
+      'nvm',
+      'office',
+      'oneplus',
+      'oniguruma',
+      'openbao',
+      'openbsd',
+      'openjdk-builds-from-oracle',
+      'opensearch',
+      'openssl',
+      'opensuse',
+      'opentofu',
+      'openvpn',
+      'openwrt',
+      'openzfs',
+      'opnsense',
+      'oracle-apex',
+      'oracle-database',
+      'oracle-graalvm',
+      'oracle-jdk',
+      'oracle-linux',
+      'oracle-solaris',
+      'otobo',
+      'ovirt',
+      'pangp',
+      'panos',
+      'pci-dss',
+      'perl',
+      'phoenix-framework',
+      'photon',
+      'php',
+      'phpbb',
+      'phpmyadmin',
+      'pigeonhole',
+      'pixel',
+      'pixel-watch',
+      'plesk',
+      'plone',
+      'pnpm',
+      'podman',
+      'pop-os',
+      'postfix',
+      'postgresql',
+      'postmarketos',
+      'powershell',
+      'privatebin',
+      'proftpd',
+      'prometheus',
+      'protractor',
+      'proxmox-backup-server',
+      'proxmox-datacenter-manager',
+      'proxmox-mail-gateway',
+      'proxmox-ve',
+      'puppet',
+      'python',
+      'qt',
+      'quarkus-framework',
+      'quasar',
+      'rabbitmq',
+      'rails',
+      'rancher',
+      'raspberry-pi',
+      'react',
+      'react-native',
+      'red-hat-ansible-automation-platform',
+      'red-hat-openshift',
+      'redhat-build-of-openjdk',
+      'redhat-jboss-eap',
+      'redhat-satellite',
+      'redis',
+      'redmine',
+      'renovate',
+      'rhel',
+      'robo',
+      'rocket-chat',
+      'rocky-linux',
+      'ros',
+      'ros-2',
+      'roundcube',
+      'routeros',
+      'rtpengine',
+      'ruby',
+      'rust',
+      'salt',
+      'samsung-galaxy-tab',
+      'samsung-galaxy-watch',
+      'samsung-mobile',
+      'sapmachine',
+      'scala',
+      'sharepoint',
+      'shopware',
+      'silverstripe',
+      'slackware',
+      'sles',
+      'sns-firmware',
+      'sns-hardware',
+      'sns-smc',
+      'solr',
+      'sonarqube-community',
+      'sonarqube-server',
+      'sony-xperia',
+      'sourcegraph',
+      'splunk',
+      'spring-boot',
+      'spring-cloud',
+      'spring-framework',
+      'spring-security',
+      'sqlite',
+      'squid',
+      'statamic',
+      'steamos',
+      'strapi',
+      'surface',
+      'suse-linux-micro',
+      'suse-manager',
+      'svelte',
+      'symfony',
+      'tails',
+      'tailwind-css',
+      'tarantool',
+      'tarteaucitron',
+      'telegraf',
+      'teleport',
+      'terraform',
+      'thumbor',
+      'tls',
+      'tomcat',
+      'traefik',
+      'truenas',
+      'tvos',
+      'twig',
+      'typo3',
+      'ubuntu',
+      'umbraco',
+      'unity',
+      'unrealircd',
+      'valkey',
+      'vcenter',
+      'veeam-backup-and-replication',
+      'veeam-backup-for-microsoft-365',
+      'veeam-one',
+      'vinyl-cache',
+      'virtualbox',
+      'visionos',
+      'visual-cobol',
+      'visual-studio',
+      'vitess',
+      'vmware-cloud-foundation',
+      'vmware-harbor-registry',
+      'vmware-srm',
+      'vue',
+      'vuetify',
+      'wagtail',
+      'watchos',
+      'weakforced',
+      'weechat',
+      'windows',
+      'windows-embedded',
+      'windows-nano-server',
+      'windows-powershell',
+      'windows-server',
+      'windows-server-core',
+      'wireshark',
+      'wordpress',
+      'xcp-ng',
+      'yarn',
+      'yocto',
+      'youtrack',
+      'zabbix',
+      'zentyal',
+      'zerto',
+      'zookeeper'
+    )]
+    [Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName, ParameterSetName = 'Query')]
+    [Alias('Product')]
+    [string] $ProductName
+    # END GENERATED END-OF-LIFE PRODUCT VALIDATESET
+
+    ,
+    [Parameter(Mandatory, ParameterSetName = 'ListProducts')]
+    [switch] $ListProducts,
+
+    [Parameter(ParameterSetName = 'ListProducts')]
+    [string] $Like,
+
+    [Parameter(ParameterSetName = 'Query')]
+    [switch] $ActiveSupport,
+
+    [Parameter(ParameterSetName = 'Query')]
+    [switch] $LtsSupport,
+
+    [ValidateRange(1, 60)]
+    [int] $TimeoutSec = 10,
+
+    [uri] $ApiBaseUri = 'https://endoflife.date/api'
+  )
+
+  process {
+    if ($ListProducts) {
+      # Extract the list of validated products from the ValidateSet attribute
+      $products = @(
         'adonisjs',
         'akeneo-pim',
         'alibaba-ack',
@@ -578,24 +1106,16 @@ function Get-EolInfo {
         'zentyal',
         'zerto',
         'zookeeper'
-    )]
-    [Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
-    [Alias('Product')]
-    [string] $ProductName
-    # END GENERATED END-OF-LIFE PRODUCT VALIDATESET
+      )
 
-    ,
-    [switch] $ActiveSupport,
+      if ([string]::IsNullOrWhiteSpace($Like)) {
+        return $products | Sort-Object
+      }
+      else {
+        return $products | Where-Object { $_ -like $Like } | Sort-Object
+      }
+    }
 
-    [switch] $LtsSupport,
-
-    [ValidateRange(1, 60)]
-    [int] $TimeoutSec = 10,
-
-    [uri] $ApiBaseUri = 'https://endoflife.date/api'
-  )
-
-  process {
     $baseUri = ([string]$ApiBaseUri).TrimEnd('/')
     $requestUri = '{0}/{1}.json' -f $baseUri, [System.Uri]::EscapeDataString($ProductName)
 
@@ -607,6 +1127,9 @@ function Get-EolInfo {
         -ErrorAction Stop
     }
     catch {
+      if ((Get-EndOfLifeHttpStatusCode -ErrorRecord $_) -eq 429) {
+        throw "endoflife.date rate-limited this request (HTTP 429). Wait a minute before trying again."
+      }
       throw "Unable to retrieve end-of-life information for '$ProductName'. $($_.Exception.Message)"
     }
 
@@ -623,6 +1146,7 @@ function Get-EolInfo {
       }
 
       [pscustomobject][ordered]@{
+        PSTypeName = 'PwshProfile.EndOfLife.Result'
         Product = $ProductName
         Cycle = [string]$entry.cycle
         Latest = [string]$entry.latest

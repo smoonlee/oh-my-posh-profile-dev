@@ -9,6 +9,7 @@
   CmdletsToExport = @()
   VariablesToExport = @()
   AliasesToExport = @()
+  FormatsToProcess = @('PwshProfile.NetworkCidr.Format.ps1xml')
   PrivateData = @{
     PSData = @{
       ProjectUri = 'https://github.com/smoonlee/oh-my-posh-profile-dev'

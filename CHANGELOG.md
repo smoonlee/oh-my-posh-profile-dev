@@ -5,7 +5,97 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.0.0-pre-release-0.9] - 2026-09-01
+
+### Profile status display
+
+- `Get-PwshProfile` now prints a concise `Module | Version | Description | Status`
+  table (sorted A-Z) for all optional modules, followed by a short version and
+  update-channel summary, instead of a raw object dump.
+- Add a `PwshProfile.Status` and `PwshProfile.OptionalModule` display format so
+  the summary and per-module detail render cleanly whether accessed together
+  or piped separately.
+
+### Theme fixes
+
+- Increase the Copilot usage segment's `http_timeout` from 1500ms to 3000ms to
+  reduce dropped segments on a cold per-session cache miss.
+- Show the `azureCli` and `azurePwsh` segments together even when they report
+  the same subscription, for full verbose context.
+- Add `overflow: break` to the right-aligned status/execution-time/Copilot/time
+  block, and raise `azurePwsh`'s `min_width` to 160, to stop the prompt from
+  hard-wrapping mid-word on narrower terminals.
+
+### LocalSource install fix
+
+- Allow `-LocalSource` with `-RunPhase All` so a first-time machine can install
+  Nerd Font, Winget packages, and PowerShell Gallery modules from their normal
+  sources while installing the profile and optional modules from the local
+  working tree instead of a GitHub Release.
+- Remove the hidden profile install previously embedded at the end of the
+  `Modules` phase, which always installed from a GitHub Release and silently
+  ignored `-LocalSource`; the top-level dispatcher now installs the profile
+  explicitly for both `All` and `Profile`.
+- Fix the Nerd Font phase to also honor `-LocalSource`: it previously always
+  queried a published GitHub Release for `NerdFontsCatalog.json` regardless of
+  `-LocalSource`, which failed outright when no stable release existed yet.
+  `-LocalSource` now loads the catalog from the local repository instead, and
+  is forwarded through Administrator elevation relaunches for font installation.
+
+### Dns module
+
+- Add a disabled-by-default `PwshProfile.Dns` module with `Get-DnsResult` for
+  querying DNS records, using `Resolve-DnsName` on Windows and falling back to
+  `dig` where it is unavailable.
+- Support `-RecordType` (A, AAAA, CNAME, MX, NS, PTR, SOA, SRV, TXT, CAA) and
+  `-Server` to target a specific resolver.
+- Add `Set-PwshProfile -EnableDns` and track the module through local and
+  release profile installation.
+- Accept a full URL (such as `https://example.com`) for `-Domain`, parsing out
+  the host automatically.
+- Add `-All` to query every common record type and print a grouped breakdown,
+  one table per type that has results.
+- Fix `Resolve-DnsName` returning a negative-response `SOA` record (Authority
+  section) as if it were the requested type when no records of that type
+  exist; it is now filtered out of the results.
+
+### TlsCertificate module
+
+- Add a disabled-by-default `PwshProfile.TlsCertificate` module with
+  `Get-TlsCertificate` for remote (native `SslStream`) and local file
+  certificate inspection, reporting subject, issuer, validity dates, days
+  remaining, and thumbprint.
+- Add OpenSSL-backed (`FireDaemon.OpenSSL`) helpers: `Split-PfxCertificate` to
+  extract the private key, certificate, and intermediate chain from a PFX;
+  `New-PfxCertificate` to package them back into a PFX; `Test-CertificateKeyMatch`
+  to verify a certificate and private key belong together; and
+  `New-SelfSignedTlsCertificate` to generate a self-signed certificate and key
+  for local development.
+- Pass PFX and private key passwords to OpenSSL over stdin rather than as
+  command-line arguments to avoid exposing them in the process list.
+- Add `Set-PwshProfile -EnableTlsCertificate` and track the module through
+  local and release profile installation.
+- Accept a full URL (such as `https://example.com`) for `-HostName`, parsing
+  out the host and, if present, the port automatically.
+- Add `-ShowChain` to walk and print the full certificate chain of trust
+  (leaf, intermediates, and root) captured during the TLS handshake.
+
+### NetworkCidr module
+
+- Add a `PwshProfile.NetworkCidr.Format.ps1xml` default table view
+  (`Cidr`, `Provider`, `NetworkAddress`, `FirstUsableIP`, `LastUsableIP`,
+  `BroadcastAddress`, `UsableAddressCount`) instead of a raw ~20-property list
+  dump, and track the new format file through local and release installation.
+- Replace `-Provider`'s combined canonical/legacy `ValidateSet` with
+  tab-completion limited to the four canonical names (`Standard`, `Azure`,
+  `AWS`, `GCP`); the legacy aliases (`Normal`, `Amazon`, `Google`) are still
+  accepted, and an invalid value now throws a clear, specific error.
+
+### Installer
+
+- Prefix the install status message for a replaced/updated file with
+  `[Updated]` so it's clear at a glance which files changed versus which were
+  already verified.
 
 ## [4.0.0-pre-release-0.8] - 2026-08-26
 

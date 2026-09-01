@@ -197,7 +197,9 @@ function Start-PwshProfileElevated {
     [Parameter(Mandatory)]
     [string] $NerdFontName,
 
-    [switch] $Prerelease
+    [switch] $Prerelease,
+
+    [switch] $LocalSource
   )
 
   if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -216,6 +218,9 @@ function Start-PwshProfileElevated {
   $command = "& '$escapedScriptPath' -NerdFontName '$escapedFontName' -RunPhase 'NerdFont'"
   if ($Prerelease) {
     $command += ' -Prerelease'
+  }
+  if ($LocalSource) {
+    $command += ' -LocalSource'
   }
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
   $arguments = @(
@@ -254,31 +259,45 @@ function Start-PwshProfileElevated {
 }
 
 function Get-NerdFontsCatalog {
-  [CmdletBinding()]
+  [CmdletBinding(DefaultParameterSetName = 'Remote')]
   param (
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory, ParameterSetName = 'Remote')]
     [uri] $RemoteUri,
 
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory, ParameterSetName = 'Remote')]
     [ValidatePattern('^[a-fA-F0-9]{64}$')]
-    [string] $ExpectedSha256
+    [string] $ExpectedSha256,
+
+    [Parameter(Mandatory, ParameterSetName = 'Local')]
+    [string] $LocalPath
   )
 
-  Write-PwshProfileStatus -Stage 'Catalog' -Message 'Loading the latest Nerd Fonts metadata...'
-  Write-Verbose "Catalog source: $RemoteUri"
-
-  $catalogTemporaryPath = Join-Path ([System.IO.Path]::GetTempPath()) "NerdFontsCatalog.$PID.json"
-  try {
-    Save-PwshProfileReleaseAsset -Uri $RemoteUri -Destination $catalogTemporaryPath
-    $catalogHash = (Get-FileHash -LiteralPath $catalogTemporaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($catalogHash -ine $ExpectedSha256) {
-      throw 'SHA-256 verification failed for the published Nerd Fonts catalog.'
+  if ($PSCmdlet.ParameterSetName -eq 'Local') {
+    Write-PwshProfileStatus -Stage 'Catalog' -Message 'Loading the local Nerd Fonts metadata...'
+    Write-Verbose "Catalog source: $LocalPath"
+    try {
+      $catalogJson = Get-Content -LiteralPath $LocalPath -Raw -ErrorAction Stop
+    } catch {
+      throw "Unable to load the local Nerd Fonts catalog from '$LocalPath'. $($_.Exception.Message)"
     }
-    $catalogJson = Get-Content -LiteralPath $catalogTemporaryPath -Raw -ErrorAction Stop
-  } catch {
-    throw "Unable to load the published Nerd Fonts catalog from '$RemoteUri'. $($_.Exception.Message)"
-  } finally {
-    Remove-Item -LiteralPath $catalogTemporaryPath -Force -ErrorAction SilentlyContinue
+  }
+  else {
+    Write-PwshProfileStatus -Stage 'Catalog' -Message 'Loading the latest Nerd Fonts metadata...'
+    Write-Verbose "Catalog source: $RemoteUri"
+
+    $catalogTemporaryPath = Join-Path ([System.IO.Path]::GetTempPath()) "NerdFontsCatalog.$PID.json"
+    try {
+      Save-PwshProfileReleaseAsset -Uri $RemoteUri -Destination $catalogTemporaryPath
+      $catalogHash = (Get-FileHash -LiteralPath $catalogTemporaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
+      if ($catalogHash -ine $ExpectedSha256) {
+        throw 'SHA-256 verification failed for the published Nerd Fonts catalog.'
+      }
+      $catalogJson = Get-Content -LiteralPath $catalogTemporaryPath -Raw -ErrorAction Stop
+    } catch {
+      throw "Unable to load the published Nerd Fonts catalog from '$RemoteUri'. $($_.Exception.Message)"
+    } finally {
+      Remove-Item -LiteralPath $catalogTemporaryPath -Force -ErrorAction SilentlyContinue
+    }
   }
 
   try {
@@ -1212,6 +1231,7 @@ function Get-WingetPackageDefinitions {
   param ()
 
   @(
+    # System - Machine Scoped Applications
     [pscustomobject]@{ Id = 'Amazon.AWSCLI'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'FireDaemon.OpenSSL'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Git.Git'; Scope = 'machine' }
@@ -1219,15 +1239,18 @@ function Get-WingetPackageDefinitions {
     [pscustomobject]@{ Id = 'GitHub.Copilot'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Hashicorp.Terraform'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Helm.Helm'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }
     [pscustomobject]@{ Id = 'jqlang.jq'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Kubernetes.kubectl'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.AzureCLI'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Microsoft.Azure.Kubelogin'; Scope = 'machine' }
-    [pscustomobject]@{ Id = 'Microsoft.Bicep'; Scope = 'user' }
     [pscustomobject]@{ Id = 'Microsoft.PowerShell'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'MikeFarah.yq'; Scope = 'machine' }
     [pscustomobject]@{ Id = 'Ookla.Speedtest.CLI'; Scope = 'machine' }
+    [pscustomobject]@{ Id = 'OpenAI.Codex'; Scope = 'machine' }
+
+    # Use Scoped Applications
+    [pscustomobject]@{ Id = 'JanDeDobbeleer.OhMyPosh'; Scope = 'user' }
+    [pscustomobject]@{ Id = 'Microsoft.Bicep'; Scope = 'user' }
   )
 }
 
@@ -1992,8 +2015,10 @@ function Import-PwshProfileConfiguration {
   }
 
   try {
-    Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message "Loading into the current session: $Path"
-    . $Path
+    Write-PwshProfileStatus -Stage 'Profile' -Type Action -Message "Reloading into the current session: $PROFILE"
+    # Reload via $PROFILE itself so the running session ends up in the exact
+    # state a brand new PowerShell window would start in.
+    . $PROFILE
     Write-PwshProfileStatus -Stage 'Profile' -Type Success -Message 'PowerShell profile loaded into the current session.'
   } catch {
     Write-PwshProfileStatus -Stage 'Profile' -Type Warning -Message "Could not load the PowerShell profile: $($_.Exception.Message)"
@@ -2047,8 +2072,23 @@ function Get-PwshProfileNerdFontsCatalogSource {
   param (
     [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
 
-    [switch] $Prerelease
+    [switch] $Prerelease,
+
+    [switch] $LocalSource,
+
+    [string] $SourceRoot
   )
+
+  if ($LocalSource) {
+    $catalogPath = Join-Path (Split-Path -Path $SourceRoot -Parent) 'NerdFontsCatalog.json'
+    if (-not (Test-Path -LiteralPath $catalogPath -PathType Leaf)) {
+      throw "Local Nerd Fonts catalog not found: $catalogPath"
+    }
+    return [pscustomobject]@{
+      LocalPath = $catalogPath
+      ReleaseTag = 'local'
+    }
+  }
 
   $channel = if ($Prerelease) { 'prerelease' } else { 'stable' }
   $release = Get-PwshProfileGitHubRelease -Repository $Repository -Prerelease:$Prerelease
@@ -2177,10 +2217,18 @@ function Install-PwshProfileLocalSource {
     publicIPScript = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
     networkCidrManifest = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
     networkCidrScript = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
     endOfLifeManifest = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
     endOfLifeScript = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
     azureKubernetesScript = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
+    dnsManifest = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psd1'
+    dnsScript = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psm1'
+    dnsFormat = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   }
   foreach ($name in $sourcePaths.Keys) {
     if (-not (Test-Path -LiteralPath $sourcePaths[$name] -PathType Leaf)) {
@@ -2203,10 +2251,18 @@ function Install-PwshProfileLocalSource {
     publicIPScript = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
     networkCidrManifest = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
     networkCidrScript = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
     endOfLifeManifest = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
     endOfLifeScript = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
     azureKubernetesScript = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
+    dnsManifest = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psd1'
+    dnsScript = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psm1'
+    dnsFormat = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   }
 
   Write-PwshProfileStatus -Stage $operation -Type Warning -Message 'Development mode: release metadata and remote asset verification are intentionally bypassed.'
@@ -2220,10 +2276,18 @@ function Install-PwshProfileLocalSource {
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.publicIPManifest -ErrorAction Stop
     Test-PwshProfileScriptFile -Path $sourcePaths.networkCidrScript -Label 'Local NetworkCidr module'
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.networkCidrManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $sourcePaths.networkCidrFormat -Raw -ErrorAction Stop)
     Test-PwshProfileScriptFile -Path $sourcePaths.endOfLifeScript -Label 'Local EndOfLife module'
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.endOfLifeManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $sourcePaths.endOfLifeFormat -Raw -ErrorAction Stop)
     Test-PwshProfileScriptFile -Path $sourcePaths.azureKubernetesScript -Label 'Local AzureKubernetes module'
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.azureKubernetesManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $sourcePaths.dnsScript -Label 'Local Dns module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.dnsManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $sourcePaths.dnsFormat -Raw -ErrorAction Stop)
+    Test-PwshProfileScriptFile -Path $sourcePaths.tlsCertificateScript -Label 'Local TlsCertificate module'
+    $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.tlsCertificateManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $sourcePaths.tlsCertificateFormat -Raw -ErrorAction Stop)
     $null = Get-Content -LiteralPath $sourcePaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $sourcePaths.profile -Raw -ErrorAction Stop
@@ -2245,10 +2309,18 @@ function Install-PwshProfileLocalSource {
     publicIPScript = 'PwshProfile.PublicIP.psm1'
     networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
     networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat = 'PwshProfile.NetworkCidr.Format.ps1xml'
     endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
     endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat = 'PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
     azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
+    dnsManifest = 'PwshProfile.Dns.psd1'
+    dnsScript = 'PwshProfile.Dns.psm1'
+    dnsFormat = 'PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest = 'PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript = 'PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat = 'PwshProfile.TlsCertificate.Format.ps1xml'
   }
   $artifactHashes = [ordered]@{}
   foreach ($name in $artifactNames.Keys) {
@@ -2295,7 +2367,7 @@ function Install-PwshProfileLocalSource {
         -BackupPath $backupPath
       $backups[$name] = $backupPath
       $replaced.Add($name)
-      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message $destinations[$name]
+      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message "[Updated] $($destinations[$name])"
     }
 
     $installedManifest = [ordered]@{
@@ -2392,10 +2464,18 @@ function Invoke-PwshProfileUpdate {
   $publicIPScriptPath = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
   $networkCidrManifestPath = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
   $networkCidrScriptPath = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+  $networkCidrFormatPath = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
   $endOfLifeManifestPath = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
   $endOfLifeScriptPath = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+  $endOfLifeFormatPath = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
   $azureKubernetesManifestPath = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
   $azureKubernetesScriptPath = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
+  $dnsManifestPath = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psd1'
+  $dnsScriptPath = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psm1'
+  $dnsFormatPath = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
+  $tlsCertificateManifestPath = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
+  $tlsCertificateScriptPath = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
+  $tlsCertificateFormatPath = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   $destinations = [ordered]@{
     profile = $profilePath
     theme = $themePath
@@ -2404,10 +2484,18 @@ function Invoke-PwshProfileUpdate {
     publicIPScript = $publicIPScriptPath
     networkCidrManifest = $networkCidrManifestPath
     networkCidrScript = $networkCidrScriptPath
+    networkCidrFormat = $networkCidrFormatPath
     endOfLifeManifest = $endOfLifeManifestPath
     endOfLifeScript = $endOfLifeScriptPath
+    endOfLifeFormat = $endOfLifeFormatPath
     azureKubernetesManifest = $azureKubernetesManifestPath
     azureKubernetesScript = $azureKubernetesScriptPath
+    dnsManifest = $dnsManifestPath
+    dnsScript = $dnsScriptPath
+    dnsFormat = $dnsFormatPath
+    tlsCertificateManifest = $tlsCertificateManifestPath
+    tlsCertificateScript = $tlsCertificateScriptPath
+    tlsCertificateFormat = $tlsCertificateFormatPath
   }
 
   $installed = $null
@@ -2576,10 +2664,18 @@ function Invoke-PwshProfileUpdate {
     publicIPScript = 'PwshProfile.PublicIP.psm1'
     networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
     networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat = 'PwshProfile.NetworkCidr.Format.ps1xml'
     endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
     endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat = 'PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
     azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
+    dnsManifest = 'PwshProfile.Dns.psd1'
+    dnsScript = 'PwshProfile.Dns.psm1'
+    dnsFormat = 'PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest = 'PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript = 'PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat = 'PwshProfile.TlsCertificate.Format.ps1xml'
   }
   $stagedPaths = @{}
   try {
@@ -2613,10 +2709,18 @@ function Invoke-PwshProfileUpdate {
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.publicIPManifest -ErrorAction Stop
     Test-PwshProfileScriptFile -Path $stagedPaths.networkCidrScript -Label 'NetworkCidr module'
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.networkCidrManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $stagedPaths.networkCidrFormat -Raw -ErrorAction Stop)
     Test-PwshProfileScriptFile -Path $stagedPaths.endOfLifeScript -Label 'EndOfLife module'
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.endOfLifeManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $stagedPaths.endOfLifeFormat -Raw -ErrorAction Stop)
     Test-PwshProfileScriptFile -Path $stagedPaths.azureKubernetesScript -Label 'AzureKubernetes module'
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.azureKubernetesManifest -ErrorAction Stop
+    Test-PwshProfileScriptFile -Path $stagedPaths.dnsScript -Label 'Dns module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.dnsManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $stagedPaths.dnsFormat -Raw -ErrorAction Stop)
+    Test-PwshProfileScriptFile -Path $stagedPaths.tlsCertificateScript -Label 'TlsCertificate module'
+    $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.tlsCertificateManifest -ErrorAction Stop
+    $null = [xml](Get-Content -LiteralPath $stagedPaths.tlsCertificateFormat -Raw -ErrorAction Stop)
     $null = Get-Content -LiteralPath $stagedPaths.theme -Raw -ErrorAction Stop |
       ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $stagedPaths.profile -Raw -ErrorAction Stop
@@ -2684,7 +2788,7 @@ function Invoke-PwshProfileUpdate {
         -BackupPath $backupPath
       $backups[$name] = $backupPath
       $replaced.Add($name)
-      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message $destinations[$name]
+      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message "[Updated] $($destinations[$name])"
     }
 
     $installedManifest = [ordered]@{
@@ -2754,11 +2858,13 @@ function Invoke-GitHubConfiguration {
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'Pwsh: GitHub Configuration'
 
   $git = Get-Command git -ErrorAction SilentlyContinue
+  $needsGitGuidance = $true
   if (-not $git) {
     Write-PwshProfileStatus -Stage 'GitHub' -Type Warning -Message 'Git was not found; global commit identity could not be configured.'
   } else {
     $gitUserName = ((& $git.Source config --global --get user.name 2>$null) | Out-String).Trim()
     $gitUserEmail = ((& $git.Source config --global --get user.email 2>$null) | Out-String).Trim()
+    $needsGitGuidance = -not $gitUserName -or -not $gitUserEmail
 
     if (-not $gitUserName) {
       Write-PwshProfileStatus -Stage 'GitHub' -Message 'Git uses your first and last name to identify commits.'
@@ -2798,8 +2904,10 @@ function Invoke-GitHubConfiguration {
   }
 
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'GitHub' -Message 'Git name/email control commit attribution; they do not sign in to GitHub.'
-  Write-PwshProfileStatus -Stage 'GitHub' -Type Action -Message "GitHub CLI sign-in (if needed): gh auth login"
+  if ($needsGitGuidance) {
+    Write-PwshProfileStatus -Stage 'GitHub' -Message 'Git name/email control commit attribution; they do not sign in to GitHub.'
+    Write-PwshProfileStatus -Stage 'GitHub' -Type Action -Message "GitHub CLI sign-in (if needed): gh auth login"
+  }
   Write-PwshProfileStatus -Stage 'Copilot' -Type Action -Message "Authenticate the prompt usage segment: oh-my-posh auth copilot"
   Write-PwshProfileStatus -Stage 'Copilot' -Message 'Oh My Posh opens GitHub device login and securely stores the token for future prompt usage checks.'
   Write-Host ''
@@ -2828,9 +2936,7 @@ function Invoke-PwshProfileConfiguration {
 
 function Invoke-PowerShellModuleConfiguration {
   [CmdletBinding()]
-  param (
-    [switch] $Prerelease
-  )
+  param ()
 
   Write-PwshProfileHeader -Title 'Pwsh Profile Installer' -Subtitle 'PowerShell Module Configuration'
 
@@ -2856,8 +2962,6 @@ function Invoke-PowerShellModuleConfiguration {
   Write-Host ''
   $summaryType = if ($summary.Failed -gt 0) { 'Warning' } elseif ($summary.Updated -gt 0) { 'Success' } else { 'Current' }
   Write-PwshProfileStatus -Stage 'Modules' -Type $summaryType -Message "Summary: $($summary.Updated) updated, $($summary.Current) current, $($summary.Failed) failed."
-
-  Invoke-PwshProfileConfiguration -Prerelease:$Prerelease
 }
 
 function Get-CrossPlatformSupportPaths {
@@ -3379,8 +3483,8 @@ if ($LocalSource -and $Prerelease) {
   throw '-LocalSource and -Prerelease cannot be used together.'
 }
 
-if ($LocalSource -and $RunPhase -notin @('Profile', 'ProfileUpdate')) {
-  throw '-LocalSource is supported only with -RunPhase Profile or ProfileUpdate.'
+if ($LocalSource -and $RunPhase -notin @('All', 'NerdFont', 'Profile', 'ProfileUpdate')) {
+  throw '-LocalSource is supported only with -RunPhase All, NerdFont, Profile, or ProfileUpdate.'
 }
 
 if (-not $nerdFontName -and $RunPhase -in @('All', 'NerdFont')) {
@@ -3392,16 +3496,18 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
 
   $nerdFontStateRegistryPath = 'HKCU:\Software\smoonlee\OhMyPoshProfile\NerdFonts'
   try {
-    $catalogSource = Get-PwshProfileNerdFontsCatalogSource -Prerelease:$Prerelease
+    $catalogSource = Get-PwshProfileNerdFontsCatalogSource -Prerelease:$Prerelease -LocalSource:$LocalSource -SourceRoot $PSScriptRoot
   } catch {
     Write-PwshProfileStatus -Stage 'Catalog' -Type Danger -Message $_.Exception.Message
     Write-Host ''
     exit 1
   }
   Write-PwshProfileStatus -Stage 'Catalog' -Message "Using verified asset from $($catalogSource.ReleaseTag)."
-  $nerdFontsCatalog = Get-NerdFontsCatalog `
-    -RemoteUri $catalogSource.Uri `
-    -ExpectedSha256 $catalogSource.Sha256
+  $nerdFontsCatalog = if ($LocalSource) {
+    Get-NerdFontsCatalog -LocalPath $catalogSource.LocalPath
+  } else {
+    Get-NerdFontsCatalog -RemoteUri $catalogSource.Uri -ExpectedSha256 $catalogSource.Sha256
+  }
   $selectedNerdFont = Resolve-NerdFont -Catalog $nerdFontsCatalog -Name $nerdFontName
 
   # Download archives use ArchiveName.zip; keep the validated friendly name intact.
@@ -3448,7 +3554,8 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
       Start-PwshProfileElevated `
         -ScriptPath $PSCommandPath `
         -NerdFontName $nerdFontName `
-        -Prerelease:$Prerelease
+        -Prerelease:$Prerelease `
+        -LocalSource:$LocalSource
       $installedNerdFontFiles = @(
         Find-InstalledNerdFont -Font $selectedNerdFont -FontDirectories $windowsFontDirectories
       )
@@ -3478,10 +3585,10 @@ if ($RunPhase -in @('All', 'Winget')) {
 }
 
 if ($RunPhase -in @('All', 'Modules')) {
-  Invoke-PowerShellModuleConfiguration -Prerelease:$Prerelease
+  Invoke-PowerShellModuleConfiguration
 }
 
-if ($RunPhase -eq 'Profile') {
+if ($RunPhase -in @('All', 'Profile')) {
   Invoke-PwshProfileConfiguration -Prerelease:$Prerelease -LocalSource:$LocalSource
 }
 

@@ -11,8 +11,8 @@ alone does not run `.github/workflows/publish-profile-release.yml`.
 3. Commit the release changes and push `main`.
 4. Create an annotated tag on that exact commit and push the tag.
 5. Publish a GitHub Release for the tag.
-6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all thirteen
-   release assets.
+6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all
+   twenty-one release assets.
 
 If changes go through a pull request, merge the PR first, update local `main`
 with a fast-forward pull, and tag the resulting merge commit. Never tag the
@@ -67,10 +67,18 @@ A successful release contains:
 - `PwshProfile.PublicIP.psm1`
 - `PwshProfile.NetworkCidr.psd1`
 - `PwshProfile.NetworkCidr.psm1`
+- `PwshProfile.NetworkCidr.Format.ps1xml`
 - `PwshProfile.EndOfLife.psd1`
 - `PwshProfile.EndOfLife.psm1`
+- `PwshProfile.EndOfLife.Format.ps1xml`
 - `PwshProfile.AzureKubernetes.psd1`
 - `PwshProfile.AzureKubernetes.psm1`
+- `PwshProfile.Dns.psd1`
+- `PwshProfile.Dns.psm1`
+- `PwshProfile.Dns.Format.ps1xml`
+- `PwshProfile.TlsCertificate.psd1`
+- `PwshProfile.TlsCertificate.psm1`
+- `PwshProfile.TlsCertificate.Format.ps1xml`
 - `NerdFontsCatalog.json`
 - `PwshProfile.release.json`
 

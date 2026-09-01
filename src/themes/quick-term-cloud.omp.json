@@ -2,10 +2,10 @@
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "version": 4,
   "final_space": true,
-  "async": true,
   "patch_pwsh_bleed": true,
   "var": {
-    "dividerColor": "#d75f00"
+    "dividerColor": "#d75f00",
+    "copilotDetailedWidth": 140
   },
   "blocks": [
     {
@@ -89,6 +89,7 @@
     {
       "type": "prompt",
       "alignment": "right",
+      "overflow": "break",
       "segments": [
         {
           "type": "status",
@@ -97,7 +98,7 @@
           "invert_powerline": true,
           "foreground": "#ffffff",
           "background": "#da3633",
-          "template": " \uf071 {{ .Code }} "
+          "template": " \uf00d {{ .Code }} "
         },
         {
           "type": "executiontime",
@@ -116,19 +117,19 @@
         {
           "type": "copilot",
           "alias": "copilot",
-          "min_width": 140,
+          "min_width": 40,
           "style": "powerline",
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
           "foreground": "#111111",
           "background": "#8957e5",
           "background_templates": [
-            "{{ if gt .Premium.Percent 90 }}#da3633{{ end }}",
-            "{{ if gt .Premium.Percent 70 }}#d29922{{ end }}"
+            "{{ if ge .Premium.Percent 90 }}#da3633{{ end }}",
+            "{{ if ge .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}% ",
+          "template": " \uec1e {{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }} {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }}{{ .Premium.Percent }}%{{ end }} ",
           "options": {
-            "http_timeout": 5000
+            "http_timeout": 3000
           },
           "cache": {
             "duration": "5m",
@@ -156,18 +157,12 @@
       "newline": true,
       "segments": [
         {
-          "type": "text",
-          "style": "plain",
-          "foreground": "#d75f00",
-          "template": "\u2570\u2500"
-        },
-        {
           "type": "kubectl",
           "alias": "kubernetes",
           "min_width": 80,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
+          "template": "\u2570\u2500 \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
           "cache": {
             "duration": "30s",
             "strategy": "session"
@@ -175,11 +170,11 @@
         },
         {
           "type": "az",
-          "alias": "azure-cli",
+          "alias": "azureCli",
           "min_width": 90,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
+          "template": "{{ if not .Segments.kubernetes.Text }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -190,11 +185,11 @@
         },
         {
           "type": "az",
-          "alias": "azure-pwsh",
-          "min_width": 110,
+          "alias": "azurePwsh",
+          "min_width": 160,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
+          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -209,7 +204,7 @@
           "min_width": 120,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) (not .Segments.azurePwsh.Text) }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"

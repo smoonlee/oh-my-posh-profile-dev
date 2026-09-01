@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.8'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.9'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -87,6 +87,8 @@ function global:Get-PwshProfile {
   $enableNetworkCidr = $false
   $enableEndOfLife = $false
   $enableAzureKubernetes = $false
+  $enableDns = $false
+  $enableTlsCertificate = $false
   if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     try {
       $settings = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop |
@@ -96,6 +98,8 @@ function global:Get-PwshProfile {
       $enableNetworkCidr = [bool]$settings.enableNetworkCidr
       $enableEndOfLife = [bool]$settings.enableEndOfLife
       $enableAzureKubernetes = [bool]$settings.enableAzureKubernetes
+      $enableDns = [bool]$settings.enableDns
+      $enableTlsCertificate = [bool]$settings.enableTlsCertificate
     }
     catch {
       Write-Warning "Ignoring invalid Pwsh Profile settings at '$configPath'."
@@ -145,18 +149,32 @@ function global:Get-PwshProfile {
     [pscustomobject]@{
       Name = 'PwshProfile.PublicIP'
       Enabled = $enablePublicIP
+      Description = 'Look up public IP address details'
     }
     [pscustomobject]@{
       Name = 'PwshProfile.NetworkCidr'
       Enabled = $enableNetworkCidr
+      Description = 'Subnet / CIDR range calculator'
     }
     [pscustomobject]@{
       Name = 'PwshProfile.EndOfLife'
       Enabled = $enableEndOfLife
+      Description = 'Product end-of-life and support lookup'
     }
     [pscustomobject]@{
       Name = 'PwshProfile.AzureKubernetes'
       Enabled = $enableAzureKubernetes
+      Description = 'AKS version and upgrade helper'
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.Dns'
+      Enabled = $enableDns
+      Description = 'DNS resolution helper'
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.TlsCertificate'
+      Enabled = $enableTlsCertificate
+      Description = 'TLS certificate inspection and PFX tools'
     }
   )
   $selectedRemoteVersion = if ($enablePreReleaseUpdate) {
@@ -194,20 +212,34 @@ function global:Get-PwshProfile {
         }
       }
 
+      $moduleStatusText = if (-not $moduleInstalled) {
+        'Not Installed'
+      } elseif (-not $module.Enabled) {
+        'Disabled'
+      } elseif ($moduleUpdateAvailable) {
+        'Update Available'
+      } else {
+        'Enabled'
+      }
+
       [pscustomobject]@{
+        PSTypeName = 'PwshProfile.OptionalModule'
         Name = $module.Name
+        Description = $module.Description
         Enabled = [bool]$module.Enabled
         Installed = $moduleInstalled
         ModuleVersion = $moduleVersion
         BundleVersion = $global:PwshProfileVersion
         LatestBundleVersion = $selectedRemoteVersion
         UpdateAvailable = $moduleUpdateAvailable
+        Status = $moduleStatusText
         Path = $modulePath
       }
     }
   )
 
-  [pscustomobject]@{
+  $result = [pscustomobject]@{
+    PSTypeName = 'PwshProfile.Status'
     LocalVersion = $global:PwshProfileVersion
     StableVersion = if ($stableVersion) {
       $stableVersion
@@ -232,6 +264,8 @@ function global:Get-PwshProfile {
     EnableNetworkCidr = $enableNetworkCidr
     EnableEndOfLife = $enableEndOfLife
     EnableAzureKubernetes = $enableAzureKubernetes
+    EnableDns = $enableDns
+    EnableTlsCertificate = $enableTlsCertificate
     UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
     OptionalModules = $moduleStatuses
     EnabledModules = @($moduleStatuses | Where-Object Enabled | Select-Object -ExpandProperty Name)
@@ -244,6 +278,19 @@ function global:Get-PwshProfile {
     }
     ConfigPath = $configPath
   }
+
+  if ($SettingsOnly) {
+    return $result
+  }
+
+  $result | Format-List | Out-Host
+  Write-Host 'Pwsh Profile Modules:'
+  $moduleStatuses | Sort-Object -Property Name | Format-Table -AutoSize -Property @(
+    @{ Label = 'Module'; Expression = { $_.Name -replace '^PwshProfile\.', '' } }
+    @{ Label = 'Version'; Expression = { $_.ModuleVersion } }
+    @{ Label = 'Description'; Expression = { $_.Description } }
+    @{ Label = 'Status'; Expression = { $_.Status } }
+  ) | Out-Host
 }
 
 function global:Set-PwshProfile {
@@ -267,6 +314,12 @@ function global:Set-PwshProfile {
     [Parameter(ParameterSetName = 'AzureKubernetes')]
     [switch] $EnableAzureKubernetes,
 
+    [Parameter(ParameterSetName = 'Dns')]
+    [switch] $EnableDns,
+
+    [Parameter(ParameterSetName = 'TlsCertificate')]
+    [switch] $EnableTlsCertificate,
+
     [switch] $PassThru
   )
 
@@ -275,7 +328,9 @@ function global:Set-PwshProfile {
     -not $PSBoundParameters.ContainsKey('EnablePublicIP') -and
     -not $PSBoundParameters.ContainsKey('EnableNetworkCidr') -and
     -not $PSBoundParameters.ContainsKey('EnableEndOfLife') -and
-    -not $PSBoundParameters.ContainsKey('EnableAzureKubernetes')) {
+    -not $PSBoundParameters.ContainsKey('EnableAzureKubernetes') -and
+    -not $PSBoundParameters.ContainsKey('EnableDns') -and
+    -not $PSBoundParameters.ContainsKey('EnableTlsCertificate')) {
     return Get-PwshProfile
   }
 
@@ -285,6 +340,8 @@ function global:Set-PwshProfile {
   $useNetworkCidr = [bool]$current.EnableNetworkCidr
   $useEndOfLife = [bool]$current.EnableEndOfLife
   $useAzureKubernetes = [bool]$current.EnableAzureKubernetes
+  $useDns = [bool]$current.EnableDns
+  $useTlsCertificate = [bool]$current.EnableTlsCertificate
   $changedModuleName = $null
   $changedModuleEnabled = $false
   if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
@@ -308,10 +365,20 @@ function global:Set-PwshProfile {
     $changedModuleName = 'PwshProfile.EndOfLife'
     $changedModuleEnabled = $useEndOfLife
   }
-  else {
+  elseif ($PSBoundParameters.ContainsKey('EnableAzureKubernetes')) {
     $useAzureKubernetes = [bool]$EnableAzureKubernetes
     $changedModuleName = 'PwshProfile.AzureKubernetes'
     $changedModuleEnabled = $useAzureKubernetes
+  }
+  elseif ($PSBoundParameters.ContainsKey('EnableDns')) {
+    $useDns = [bool]$EnableDns
+    $changedModuleName = 'PwshProfile.Dns'
+    $changedModuleEnabled = $useDns
+  }
+  else {
+    $useTlsCertificate = [bool]$EnableTlsCertificate
+    $changedModuleName = 'PwshProfile.TlsCertificate'
+    $changedModuleEnabled = $useTlsCertificate
   }
   $configPath = $current.ConfigPath
   $configDirectory = Split-Path -Path $configPath -Parent
@@ -326,6 +393,8 @@ function global:Set-PwshProfile {
     enableNetworkCidr = $useNetworkCidr
     enableEndOfLife = $useEndOfLife
     enableAzureKubernetes = $useAzureKubernetes
+    enableDns = $useDns
+    enableTlsCertificate = $useTlsCertificate
     updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
   }
   $temporaryPath = "$configPath.$PID.tmp"
@@ -460,10 +529,6 @@ function Import-PwshProfileModules {
     [object] $Settings
   )
 
-  foreach ($moduleName in @('PSReadLine', 'Terminal-Icons')) {
-    Import-Module -Name $moduleName -Global -ErrorAction Ignore
-  }
-
   $optionalModules = @(
     [pscustomobject]@{
       Name = 'PwshProfile.PublicIP'
@@ -480,6 +545,14 @@ function Import-PwshProfileModules {
     [pscustomobject]@{
       Name = 'PwshProfile.AzureKubernetes'
       Enabled = [bool]$Settings.EnableAzureKubernetes
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.Dns'
+      Enabled = [bool]$Settings.EnableDns
+    }
+    [pscustomobject]@{
+      Name = 'PwshProfile.TlsCertificate'
+      Enabled = [bool]$Settings.EnableTlsCertificate
     }
   )
   foreach ($module in $optionalModules) {
@@ -501,147 +574,6 @@ function Import-PwshProfileModules {
       Write-Warning "Could not import the enabled $($module.Name) module. $($_.Exception.Message)"
     }
   }
-}
-
-function Set-PwshProfileReadLine {
-  [CmdletBinding()]
-  param ()
-
-  $setOptionCommand = Get-Command -Name Set-PSReadLineOption -ErrorAction Ignore
-  if (-not $setOptionCommand) {
-    return
-  }
-
-  $desiredOptions = [ordered]@{
-    EditMode = 'Windows'
-    PredictionSource = 'History'
-    PredictionViewStyle = 'ListView'
-    HistoryNoDuplicates = $true
-    HistorySearchCursorMovesToEnd = $true
-    HistorySaveStyle = 'SaveIncrementally'
-    MaximumHistoryCount = 10000
-    BellStyle = 'None'
-    ShowToolTips = $true
-  }
-
-  $options = @{}
-  foreach ($name in $desiredOptions.Keys) {
-    if ($setOptionCommand.Parameters.ContainsKey($name)) {
-      $options[$name] = $desiredOptions[$name]
-    }
-  }
-  Set-PSReadLineOption @options -ErrorAction Ignore
-
-  $setKeyHandlerCommand = Get-Command -Name Set-PSReadLineKeyHandler -ErrorAction Ignore
-  if (-not $setKeyHandlerCommand) {
-    return
-  }
-
-  $keyHandlers = [ordered]@{
-    'Tab'            = 'MenuComplete'
-    'Shift+Tab'      = 'TabCompletePrevious'
-    'UpArrow'        = 'HistorySearchBackward'
-    'DownArrow'      = 'HistorySearchForward'
-    'Ctrl+r'         = 'ReverseSearchHistory'
-    'Ctrl+l'         = 'ClearScreen'
-    'Ctrl+f'         = 'AcceptSuggestion'
-    'Alt+RightArrow' = 'AcceptNextSuggestionWord'
-    'F2'             = 'SwitchPredictionView'
-  }
-  $supportedFunctions = @(
-    $setKeyHandlerCommand.Parameters['Function'].Attributes |
-      Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
-      Select-Object -ExpandProperty ValidValues
-  )
-
-  foreach ($key in $keyHandlers.Keys) {
-    if ($supportedFunctions.Count -eq 0 -or $supportedFunctions -contains $keyHandlers[$key]) {
-      Set-PSReadLineKeyHandler -Key $key -Function $keyHandlers[$key] -ErrorAction Ignore
-    }
-  }
-}
-
-function Register-PwshProfileAzureCompletion {
-  [CmdletBinding()]
-  param ()
-
-  $argumentCompleterCommand = Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore
-  if (-not $argumentCompleterCommand -or
-    -not (Get-Command -Name az -ErrorAction Ignore) -or
-    -not $argumentCompleterCommand.Parameters.ContainsKey('Native')) {
-    return
-  }
-
-  Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
-    param($wordToComplete, $commandAst, $cursorPosition)
-
-    $completionFile = New-TemporaryFile
-    $variables = @{
-      ARGCOMPLETE_USE_TEMPFILES = '1'
-      _ARGCOMPLETE_STDOUT_FILENAME = $completionFile.FullName
-      COMP_LINE = $commandAst.ToString()
-      COMP_POINT = [string]$cursorPosition
-      _ARGCOMPLETE = '1'
-      _ARGCOMPLETE_SUPPRESS_SPACE = '0'
-      _ARGCOMPLETE_IFS = "`n"
-      _ARGCOMPLETE_SHELL = 'powershell'
-    }
-    $previousValues = @{}
-
-    try {
-      foreach ($name in $variables.Keys) {
-        $previousValues[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
-        [Environment]::SetEnvironmentVariable($name, $variables[$name], 'Process')
-      }
-
-      az 2>$null | Out-Null
-      Get-Content -LiteralPath $completionFile.FullName -ErrorAction Ignore |
-        Sort-Object -Unique |
-        ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
-      }
-    }
-    finally {
-      foreach ($name in $previousValues.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $previousValues[$name], 'Process')
-      }
-      Remove-Item -LiteralPath $completionFile.FullName -Force -ErrorAction Ignore
-    }
-  }
-}
-
-function Initialize-PwshProfilePrompt {
-  [CmdletBinding()]
-  param ()
-
-  if (-not (Get-Command -Name oh-my-posh -ErrorAction Ignore)) {
-    return
-  }
-
-  $themePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.json'
-  if (-not (Test-Path -LiteralPath $themePath -PathType Leaf)) {
-    Write-Warning "The tracked Oh My Posh theme was not found: $themePath. Run the Profile setup phase to restore it."
-    return
-  }
-
-  function global:Set-PwshProfilePoshContext {
-    param([bool]$originalStatus)
-
-    # Oh My Posh calls Set-PoshContext before every prompt render, so a resize
-    # is reflected the next time PowerShell draws a prompt.
-    try {
-      $env:POSH_TERMINAL_WIDTH = [string]$Host.UI.RawUI.WindowSize.Width
-    }
-    catch {
-      $env:POSH_TERMINAL_WIDTH = '0'
-    }
-  }
-
-  # Seed the value for the first render and replace any hook left by a profile reload.
-  Set-PwshProfilePoshContext $true
-  Remove-Item -LiteralPath Alias:Set-PoshContext -Force -ErrorAction Ignore
-  oh-my-posh init pwsh --config $themePath | Invoke-Expression
-  Set-Alias -Name Set-PoshContext -Value Set-PwshProfilePoshContext -Scope Global -Force
 }
 
 function Start-PwshProfileUpdateCheck {
@@ -807,11 +739,193 @@ Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
   }
 }
 
+#
+# Module Import
+$modules = @('Terminal-Icons')
+ForEach ($module in $modules) {
+  try {
+    Import-Module -Name $module -ErrorAction Stop
+  }
+  catch {
+    Write-Warning "Could not import '$module'. Run the Profile setup phase to restore tracked modules."
+  }
+}
+
+#
+# Oh My Posh
+
+$ompThemePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.json'
+
+if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
+  if (Test-Path -LiteralPath $ompThemePath -PathType Leaf) {
+    function global:Set-PwshProfilePoshContext([bool]$originalStatus) {
+      try {
+        $env:POSH_TERMINAL_WIDTH = [string]$Host.UI.RawUI.WindowSize.Width
+      }
+      catch {
+        $env:POSH_TERMINAL_WIDTH = '0'
+      }
+    }
+
+    # Seed the value for the first render and replace any hook left by a
+    # profile reload.
+    Set-PwshProfilePoshContext $true
+    Remove-Item -LiteralPath Alias:Set-PoshContext -Force -ErrorAction Ignore
+    oh-my-posh init pwsh --config $ompThemePath | Invoke-Expression
+
+    # Oh My Posh's dynamic module snapshots its function table when
+    # Invoke-Expression runs, so redefining Set-PoshContext as a function
+    # afterward is never seen by its internal caller. An alias is a separate
+    # lookup and takes priority, so it reliably overrides the no-op the
+    # module just defined.
+    Set-Alias -Name Set-PoshContext -Value Set-PwshProfilePoshContext -Scope Global -Force
+  }
+  else {
+    Write-Warning "Oh My Posh theme was not found: $ompThemePath"
+  }
+}
+else {
+  Write-Warning 'Oh My Posh was not found. Install it with: winget install JanDeDobbeleer.OhMyPosh'
+}
+
+#
+# Azure CLI tab completion
+# https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&tabs=azure-cli&pivots=winget#enable-tab-completion-in-powershell
+
+if ((Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore) -and
+  (Get-Command -Name az -ErrorAction Ignore)) {
+  Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+
+    $azCommand = Get-Command -Name az -ErrorAction Ignore
+    if (-not $azCommand) {
+      return
+    }
+
+    $completionFile = New-TemporaryFile
+    try {
+      $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+      $startInfo.UseShellExecute = $false
+      $startInfo.RedirectStandardOutput = $true
+      $startInfo.RedirectStandardError = $true
+      $startInfo.CreateNoWindow = $true
+
+      # az on Windows is usually a .cmd wrapper, which CreateProcess cannot
+      # launch directly; route it through cmd.exe when needed.
+      if ($azCommand.Source -match '\.(cmd|bat)$') {
+        $startInfo.FileName = (Get-Command -Name cmd.exe).Source
+        $startInfo.ArgumentList.Add('/d')
+        $startInfo.ArgumentList.Add('/c')
+        $startInfo.ArgumentList.Add($azCommand.Source)
+      }
+      else {
+        $startInfo.FileName = $azCommand.Source
+      }
+
+      # Set completion-only variables on the CHILD process, never on this
+      # PowerShell session. A slow or timed-out completion can then never leak
+      # az's autocomplete state into later, real az invocations.
+      $startInfo.EnvironmentVariables['ARGCOMPLETE_USE_TEMPFILES'] = '1'
+      $startInfo.EnvironmentVariables['_ARGCOMPLETE_STDOUT_FILENAME'] = $completionFile.FullName
+      $startInfo.EnvironmentVariables['COMP_LINE'] = $commandAst.ToString()
+      $startInfo.EnvironmentVariables['COMP_POINT'] = [string]$cursorPosition
+      $startInfo.EnvironmentVariables['_ARGCOMPLETE'] = '1'
+      $startInfo.EnvironmentVariables['_ARGCOMPLETE_SUPPRESS_SPACE'] = '0'
+      $startInfo.EnvironmentVariables['_ARGCOMPLETE_IFS'] = "`n"
+      $startInfo.EnvironmentVariables['_ARGCOMPLETE_SHELL'] = 'powershell'
+
+      $process = [System.Diagnostics.Process]::new()
+      $process.StartInfo = $startInfo
+      try {
+        $null = $process.Start()
+        # Do not block completion indefinitely on a slow/cold az process.
+        if (-not $process.WaitForExit(5000)) {
+          $process.Kill()
+        }
+      }
+      catch {
+        return
+      }
+
+      Get-Content -LiteralPath $completionFile.FullName -ErrorAction Ignore |
+        Sort-Object -Unique |
+        ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+      }
+    }
+    finally {
+      Remove-Item -LiteralPath $completionFile.FullName -Force -ErrorAction Ignore
+    }
+  }
+}
+
+#
+# Pwsh Profile status display formatting
+
+try {
+  $statusFormatPath = Join-Path $env:TEMP 'PwshProfile.Status.Format.ps1xml'
+  $statusFormatXml = @'
+<Configuration>
+  <ViewDefinitions>
+    <View>
+      <Name>PwshProfile.Status</Name>
+      <ViewSelectedBy>
+        <TypeName>PwshProfile.Status</TypeName>
+      </ViewSelectedBy>
+      <ListControl>
+        <ListEntries>
+          <ListEntry>
+            <ListItems>
+              <ListItem><PropertyName>LocalVersion</PropertyName></ListItem>
+              <ListItem><PropertyName>StableVersion</PropertyName></ListItem>
+              <ListItem><PropertyName>PreviewVersion</PropertyName></ListItem>
+              <ListItem><PropertyName>UpdateChannel</PropertyName></ListItem>
+              <ListItem><PropertyName>EnablePreReleaseUpdate</PropertyName></ListItem>
+              <ListItem><PropertyName>ConfigPath</PropertyName></ListItem>
+            </ListItems>
+          </ListEntry>
+        </ListEntries>
+      </ListControl>
+    </View>
+    <View>
+      <Name>PwshProfile.OptionalModule</Name>
+      <ViewSelectedBy>
+        <TypeName>PwshProfile.OptionalModule</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Module</Label><Width>22</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Version</Label><Width>10</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Description</Label><Width>42</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Status</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem><ScriptBlock>$_.Name -replace '^PwshProfile\.', ''</ScriptBlock></TableColumnItem>
+              <TableColumnItem><PropertyName>ModuleVersion</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>Description</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>Status</PropertyName></TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+  </ViewDefinitions>
+</Configuration>
+'@
+  [System.IO.File]::WriteAllText($statusFormatPath, $statusFormatXml, [System.Text.UTF8Encoding]::new($false))
+  Update-FormatData -AppendPath $statusFormatPath -ErrorAction Stop
+}
+catch {
+  Write-Warning "Could not load Pwsh Profile status display formatting. $($_.Exception.Message)"
+}
+
+#
+# Optional modules and OTA update check
+
 $profileSettings = Get-PwshProfile -SettingsOnly
 Import-PwshProfileModules -Settings $profileSettings
-Set-PwshProfileReadLine
-Register-PwshProfileAzureCompletion
-Initialize-PwshProfilePrompt
 Start-PwshProfileUpdateCheck `
   -StorePath $script:PwshProfileStorePath `
   -Repository $script:PwshProfileRepository `
@@ -819,8 +933,5 @@ Start-PwshProfileUpdateCheck `
   -Prerelease:$profileSettings.EnablePreReleaseUpdate
 
 Remove-Item Function:Import-PwshProfileModules -ErrorAction Ignore
-Remove-Item Function:Set-PwshProfileReadLine -ErrorAction Ignore
-Remove-Item Function:Register-PwshProfileAzureCompletion -ErrorAction Ignore
-Remove-Item Function:Initialize-PwshProfilePrompt -ErrorAction Ignore
 Remove-Item Function:Start-PwshProfileUpdateCheck -ErrorAction Ignore
-Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath, profileSettings -Scope Script -ErrorAction Ignore
+Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath, profileSettings, statusFormatPath, statusFormatXml -Scope Script -ErrorAction Ignore

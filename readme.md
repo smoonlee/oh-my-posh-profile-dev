@@ -158,15 +158,29 @@ refreshed, without rerunning cross-platform profile configuration:
 .\src\Invoke-PwshProfileSetup.ps1 -RunPhase ProfileUpdate -LocalSource
 ```
 
+On a machine that has never run the installer, combine `-LocalSource` with
+`-RunPhase All` to install Nerd Font, Winget packages, and PowerShell Gallery
+modules from their normal sources while installing the profile and its
+optional modules from the local working tree instead of a GitHub Release:
+
+```powershell
+.\src\Invoke-PwshProfileSetup.ps1 -nerdFontName CaskaydiaCove -RunPhase All -LocalSource
+```
+
 When `RunPhase` is omitted, `-LocalSource` selects the `Profile` phase. Local
-source mode is intentionally limited to `Profile` and `ProfileUpdate` and cannot
-be combined with `-Prerelease`. It infers the source from the checked-out
-script's `src` directory, validates the profile, setup script, module scripts,
-module manifests, theme JSON, and embedded SemVer version, verifies staged
-SHA-256 hashes, then uses the same atomic replacement, backup, rollback, and
-schema v2 baseline model as release installation. The baseline channel is
-recorded as `local`, so a later published OTA update can still verify the locally
-installed files before replacing them.
+source mode is limited to `All`, `NerdFont`, `Profile`, and `ProfileUpdate` and
+cannot be combined with `-Prerelease`. It infers the source from the
+checked-out script's `src` directory, validates the profile, setup script,
+module scripts, module manifests, theme JSON, and embedded SemVer version,
+verifies staged SHA-256 hashes, then uses the same atomic replacement, backup,
+rollback, and schema v2 baseline model as release installation. The baseline
+channel is recorded as `local`, so a later published OTA update can still
+verify the locally installed files before replacing them.
+
+With `-RunPhase All` or `-RunPhase NerdFont`, `-LocalSource` also loads
+`NerdFontsCatalog.json` from the repository root instead of a published
+release, and is forwarded through Administrator elevation relaunches so the
+elevated font installation session resolves the catalog locally too.
 
 Local mode explicitly trusts the working tree and therefore bypasses GitHub
 Release metadata and remote asset verification. Use it only for development.
@@ -177,8 +191,9 @@ release exists; it does not silently select a prerelease.
 
 This phase also creates `%APPDATA%\PwshProfile\version.json` using manifest
 schema v2. The manifest records the installed version and SHA-256 hashes of all
-eleven runtime assets: profile, theme, local updater, and the manifests and
-scripts for the PublicIP, NetworkCidr, EndOfLife, and AzureKubernetes modules.
+nineteen runtime assets: profile, theme, local updater, and the manifests,
+scripts, and format views for the PublicIP, NetworkCidr, EndOfLife,
+AzureKubernetes, Dns, and TlsCertificate modules.
 Existing schema v1 theme-only manifests are migrated the next time this phase runs.
 
 ### Profile versions and OTA updates
@@ -233,8 +248,10 @@ that used the original disable form.
 
 Custom functions live under `src/modules` and are installed as tracked profile
 assets. They are disabled by default and load only when enabled through
-`Set-PwshProfile`. Use `Get-PwshProfile` to view `OptionalModules`,
-`EnabledModules`, `DisabledModules`, and `ModulesAvailableForUpdate`.
+`Set-PwshProfile`. Running `Get-PwshProfile` interactively prints a
+`Module | Version | Description | Status` table (sorted A-Z) followed by the
+version and update-channel summary; the full per-module detail remains
+available programmatically via `(Get-PwshProfile).OptionalModules`.
 Module changes apply immediately in the current session. `Set-PwshProfile`
 prints only a concise confirmation by default; add `-PassThru` to return the
 complete updated profile state.
@@ -264,9 +281,12 @@ Get-NetworkCidr -Cidr 10.20.0.0/24 -Provider Azure | Format-List
 
 `-Provider` accepts `Standard` (the default), `Azure`, `AWS`, or `GCP` and avoids
 ambiguous combinations of provider switches. `Normal`, `Amazon`, and `Google`
-are accepted as compatibility values. Results remain objects for filtering,
-exporting, or formatting and include normalized CIDR, masks, usable range,
-address counts, named reservations, and provider prefix support.
+are accepted as compatibility values but are not shown in tab-completion, which
+only lists the four canonical names. Results remain objects for filtering,
+exporting, or formatting; the default view is a concise summary table
+(`Cidr`, `Provider`, `NetworkAddress`, `FirstUsableIP`, `LastUsableIP`,
+`BroadcastAddress`, `UsableAddressCount`), while the full object also includes
+masks, named reservations, and provider prefix support.
 
 Split a network into equal child ranges by prefix or by a minimum subnet count.
 Non-power-of-two counts round up to the next power of two, so requesting three
@@ -330,6 +350,63 @@ Get-AksVersion -OpenReleaseTracker
 Set-PwshProfile -EnableAzureKubernetes:$false
 ```
 
+Enable the Dns module:
+
+```powershell
+Set-PwshProfile -EnableDns
+Get-DnsResult -Domain example.com -RecordType MX
+```
+
+`Get-DnsResult` resolves DNS records using `Resolve-DnsName` on Windows, or
+falls back to `dig` on platforms where `Resolve-DnsName` is unavailable. Use
+`-RecordType` to query A, AAAA, CNAME, MX, NS, PTR, SOA, SRV, TXT, or CAA
+records, and `-Server` to query a specific DNS server. `-Domain` also accepts a
+full URL such as `https://example.com`; the scheme and path are stripped
+automatically. Use `-All` to query every common record type (A, AAAA, CNAME,
+MX, NS, TXT, SOA, CAA, SRV) and print a grouped breakdown, one table per type
+that actually has records:
+
+```powershell
+Get-DnsResult -Domain example.com -All
+```
+
+Disable the module with:
+
+```powershell
+Set-PwshProfile -EnableDns:$false
+```
+
+Enable the TlsCertificate module:
+
+```powershell
+Set-PwshProfile -EnableTlsCertificate
+Get-TlsCertificate -HostName example.com
+```
+
+`Get-TlsCertificate` connects to a remote host and port (default 443) using
+.NET's `SslStream` to report the certificate's subject, issuer, validity dates,
+days remaining, and thumbprint, or reads a local certificate file with
+`-Path`. `-HostName` also accepts a full URL such as `https://example.com`; the
+scheme, port, and path are parsed automatically. Add `-ShowChain` to walk and
+print the full certificate chain of trust (leaf, intermediates, and root) as
+sent by the server during the handshake:
+
+```powershell
+Get-TlsCertificate -HostName example.com -ShowChain
+```
+
+The module also includes OpenSSL-backed helpers (requires
+`FireDaemon.OpenSSL`): `Split-PfxCertificate` to extract the private key,
+certificate, and intermediate chain from a `.pfx`; `New-PfxCertificate` to
+package them back into a `.pfx`; `Test-CertificateKeyMatch` to verify a
+certificate and private key belong together; and
+`New-SelfSignedTlsCertificate` to generate a self-signed certificate and key
+for local development. Disable the module with:
+
+```powershell
+Set-PwshProfile -EnableTlsCertificate:$false
+```
+
 #### Future settings candidates
 
 These ideas are not implemented yet, but fit naturally under
@@ -349,7 +426,7 @@ These ideas are not implemented yet, but fit naturally under
 2. Compares all previously tracked files with their schema v2 baseline and
   refuses the update if any were locally modified or removed. Newly introduced
   release assets have no prior local baseline and are verified before installation.
-3. Downloads the eleven runtime assets beside their destinations, verifies every
+3. Downloads the nineteen runtime assets beside their destinations, verifies every
   SHA-256 hash, parses the PowerShell profile, setup script, and module scripts,
   validates the theme JSON and module manifests, and confirms the profile's
   embedded version.
@@ -384,7 +461,7 @@ published. Before creating a release:
 The workflow validates the tag and embedded version; parses the profile, setup
 script, module scripts, theme, module manifests, and Nerd Fonts catalog; computes
 SHA-256 hashes from the tagged files; generates `PwshProfile.release.json`; and
-uploads all thirteen release assets. It does not overwrite an existing release asset.
+uploads all twenty-one release assets. It does not overwrite an existing release asset.
 Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Dynamic prompt updates

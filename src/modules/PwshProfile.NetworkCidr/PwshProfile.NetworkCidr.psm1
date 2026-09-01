@@ -171,6 +171,7 @@ function New-NetworkCidrResult {
   }
 
   [pscustomobject][ordered]@{
+    PSTypeName = 'PwshProfile.NetworkCidr.Result'
     InputCidr = $InputCidr
     Cidr = "$(ConvertFrom-NetworkCidrInteger -Value $NetworkValue)/$PrefixLength"
     Provider = $Provider
@@ -241,6 +242,10 @@ function Get-NetworkCidr {
   .PARAMETER MaxSubnets
       Safety limit for the number of child subnet objects returned.
 
+  .PARAMETER Summary
+      Return only essential properties: InputCidr, Cidr, Provider, PrefixLength, SubnetMask,
+      NetworkAddress, FirstUsableIP, LastUsableIP, BroadcastAddress, TotalAddressCount, and UsableAddressCount.
+
   .EXAMPLE
       Get-NetworkCidr -Cidr 10.20.0.15/24
 
@@ -248,12 +253,15 @@ function Get-NetworkCidr {
       Get-NetworkCidr -Cidr 10.20.0.0/24 -Provider Azure | Format-List
 
   .EXAMPLE
+      Get-NetworkCidr -Cidr 10.20.0.0/24 -Provider Azure -Summary
+
+  .EXAMPLE
       Get-NetworkCidr 10.20.0.0/24 -Provider AWS -SplitPrefix 26
 
-    .EXAMPLE
+  .EXAMPLE
       Get-NetworkCidr 10.20.0.0/24 -SubnetCount 3
 
-    .EXAMPLE
+  .EXAMPLE
       Get-NetworkCidr 10.20.0.0/24 -SplitPrefix 28 -SubnetIndex 5
   #>
   [CmdletBinding()]
@@ -263,7 +271,10 @@ function Get-NetworkCidr {
     [ValidateNotNullOrEmpty()]
     [string] $Cidr,
 
-    [ValidateSet('Standard', 'Azure', 'AWS', 'GCP', 'Normal', 'Amazon', 'Google')]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        @('Standard', 'Azure', 'AWS', 'GCP') | Where-Object { $_ -like "$wordToComplete*" }
+      })]
     [string] $Provider = 'Standard',
 
     [ValidateRange(0, 32)]
@@ -276,10 +287,16 @@ function Get-NetworkCidr {
     [uint64] $SubnetIndex,
 
     [ValidateRange(1, 1048576)]
-    [int] $MaxSubnets = 4096
+    [int] $MaxSubnets = 4096,
+
+    [switch] $Summary
   )
 
   process {
+    if ($Provider -notin @('Standard', 'Azure', 'AWS', 'GCP', 'Normal', 'Amazon', 'Google')) {
+      throw "Provider '$Provider' is not supported. Use Standard, Azure, AWS, or GCP."
+    }
+
     if ($Cidr -notmatch '^(?<address>[^/]+)/(?<prefix>\d{1,2})$') {
       throw "CIDR '$Cidr' must use IPv4 address/prefix notation, for example 10.20.0.0/24."
     }
@@ -318,11 +335,18 @@ function Get-NetworkCidr {
     }
 
     if (-not $hasSplitPrefix -and -not $hasSubnetCount) {
-      New-NetworkCidrResult `
+      $result = New-NetworkCidrResult `
         -NetworkValue $networkValue `
         -PrefixLength $prefixLength `
         -Provider $providerName `
         -InputCidr $Cidr
+
+      if ($Summary) {
+        $result | Select-Object InputCidr, Cidr, Provider, PrefixLength, SubnetMask, NetworkAddress, FirstUsableIP, LastUsableIP, BroadcastAddress, TotalAddressCount, UsableAddressCount
+      }
+      else {
+        $result
+      }
     }
     else {
       if ($hasSplitPrefix) {
@@ -358,13 +382,20 @@ function Get-NetworkCidr {
       $firstIndex = if ($hasSubnetIndex) { $SubnetIndex } else { [uint64]0 }
       $indexLimit = if ($hasSubnetIndex) { $SubnetIndex + 1 } else { $totalSubnetCount }
       for ([uint64]$index = $firstIndex; $index -lt $indexLimit; $index++) {
-        New-NetworkCidrResult `
+        $result = New-NetworkCidrResult `
           -NetworkValue ($networkValue + ($index * $subnetSize)) `
           -PrefixLength $childPrefix `
           -Provider $providerName `
           -InputCidr $Cidr `
           -SubnetIndex $index `
           -SubnetCount $totalSubnetCount
+
+        if ($Summary) {
+          $result | Select-Object InputCidr, Cidr, Provider, PrefixLength, SubnetMask, NetworkAddress, FirstUsableIP, LastUsableIP, BroadcastAddress, TotalAddressCount, UsableAddressCount
+        }
+        else {
+          $result
+        }
       }
     }
   }

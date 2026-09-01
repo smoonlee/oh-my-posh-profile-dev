@@ -1,3 +1,17 @@
+# Common Azure regions for AKS; shared by -ListRegions and the -Location tab completer.
+$script:AksCommonRegions = @(
+  'eastus', 'eastus2', 'westus', 'westus2', 'westus3',
+  'canadacentral', 'canadaeast',
+  'northeurope', 'westeurope', 'francecentral', 'germanynorth', 'germanywestcentral', 'switzerlandnorth', 'switzerlandwest', 'uksouth', 'ukwest',
+  'japaneast', 'japanwest', 'koreacentral', 'koreasouth',
+  'southeastasia', 'australiaeast', 'australiasoutheast', 'newzealandnorth',
+  'southcentralus', 'southindia', 'centralindia', 'northindia',
+  'brazilsouth', 'brazilsoutheast',
+  'norwaywest', 'norwayeast',
+  'uaenorth', 'qatarcentral',
+  'southafricanorth', 'southafricawest'
+) | Sort-Object
+
 function Get-AksVersion {
   <#
   .SYNOPSIS
@@ -22,6 +36,9 @@ function Get-AksVersion {
   .PARAMETER OpenReleaseTracker
       Open the AKS Kubernetes version release tracker in the default browser.
 
+  .PARAMETER ListRegions
+      List commonly available Azure regions for AKS.
+
   .EXAMPLE
       Get-AksVersion -Location eastus
 
@@ -30,6 +47,9 @@ function Get-AksVersion {
 
   .EXAMPLE
       Get-AksVersion -OpenReleaseTracker
+
+  .EXAMPLE
+      Get-AksVersion -ListRegions
   #>
   [CmdletBinding(DefaultParameterSetName = 'Versions')]
   [OutputType([pscustomobject])]
@@ -46,8 +66,15 @@ function Get-AksVersion {
     [switch] $IncludePreview,
 
     [Parameter(Mandatory, ParameterSetName = 'ReleaseTracker')]
-    [switch] $OpenReleaseTracker
+    [switch] $OpenReleaseTracker,
+
+    [Parameter(Mandatory, ParameterSetName = 'ListRegions')]
+    [switch] $ListRegions
   )
+
+  if ($ListRegions) {
+    return $script:AksCommonRegions
+  }
 
   if ($OpenReleaseTracker) {
     try {
@@ -74,7 +101,13 @@ function Get-AksVersion {
     $arguments += @('--subscription', $Subscription)
   }
 
-  $output = & $azCommand.Name @arguments 2>&1
+  Write-Progress -Activity 'Get-AksVersion' -Status "Querying Azure CLI for '$Location'..."
+  try {
+    $output = & $azCommand.Name @arguments 2>&1
+  }
+  finally {
+    Write-Progress -Activity 'Get-AksVersion' -Completed
+  }
   if ($LASTEXITCODE -ne 0) {
     $details = ($output | Out-String).Trim()
     if (-not $details) {
@@ -90,19 +123,48 @@ function Get-AksVersion {
     throw "Azure CLI returned invalid JSON for AKS versions in '$Location'. $($_.Exception.Message)"
   }
 
-  foreach ($version in @($result.orchestrators)) {
-    $isPreview = [bool]$version.isPreview
+  if ($null -ne $result.orchestrators) {
+    # Older az CLI versions return a flat orchestrators array with per-patch metadata.
+    foreach ($version in @($result.orchestrators)) {
+      $isPreview = [bool]$version.isPreview
+      if ($isPreview -and -not $IncludePreview) {
+        continue
+      }
+
+      [pscustomobject][ordered]@{
+        Location = $Location
+        KubernetesVersion = [string]$version.orchestratorVersion
+        IsDefault = [bool]$version.default
+        IsPreview = $isPreview
+      }
+    }
+    return
+  }
+
+  # Current az CLI versions group patch versions under each minor version entry.
+  foreach ($minorVersion in @($result.values)) {
+    $isPreview = [bool]$minorVersion.isPreview
     if ($isPreview -and -not $IncludePreview) {
       continue
     }
+    $isDefault = [bool]$minorVersion.isDefault
 
-    [pscustomobject][ordered]@{
-      Location = $Location
-      KubernetesVersion = [string]$version.orchestratorVersion
-      IsDefault = [bool]$version.default
-      IsPreview = $isPreview
+    foreach ($patchVersion in @($minorVersion.patchVersions.PSObject.Properties.Name)) {
+      [pscustomobject][ordered]@{
+        Location = $Location
+        KubernetesVersion = $patchVersion
+        IsDefault = $isDefault
+        IsPreview = $isPreview
+      }
     }
   }
+}
+
+Register-ArgumentCompleter -CommandName Get-AksVersion -ParameterName Location -ScriptBlock {
+  param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+  $script:AksCommonRegions |
+    Where-Object { $_ -like "$wordToComplete*" } |
+    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
 }
 
 Export-ModuleMember -Function Get-AksVersion

@@ -1,3 +1,23 @@
+function Get-PublicIPHttpStatusCode {
+  # Extracts the HTTP status code from an Invoke-RestMethod error, if present.
+  param (
+    [Parameter(Mandatory)]
+    [System.Management.Automation.ErrorRecord] $ErrorRecord
+  )
+
+  $response = $ErrorRecord.Exception.Response
+  if (-not $response) {
+    return $null
+  }
+
+  try {
+    return [int]$response.StatusCode
+  }
+  catch {
+    return $null
+  }
+}
+
 function Get-PublicIP {
   <#
   .SYNOPSIS
@@ -9,12 +29,12 @@ function Get-PublicIP {
 
     .PARAMETER TimeoutSec
       Maximum number of seconds to wait for the ipinfo.io request. The default
-      is three seconds.
+      is five seconds.
 
   .EXAMPLE
       Get-PublicIP
 
-      Gets public IP information using the default three-second timeout.
+      Gets public IP information using the default five-second timeout.
 
   .EXAMPLE
       Get-PublicIP | Format-List
@@ -25,7 +45,7 @@ function Get-PublicIP {
   [OutputType([pscustomobject])]
   param (
     [ValidateRange(1, 60)]
-    [int] $TimeoutSec = 3
+    [int] $TimeoutSec = 5
   )
 
   try {
@@ -35,6 +55,9 @@ function Get-PublicIP {
       -ErrorAction Stop
   }
   catch {
+    if ((Get-PublicIPHttpStatusCode -ErrorRecord $_) -eq 429) {
+      throw 'ipinfo.io rate-limited this request (HTTP 429). Wait a minute before trying again.'
+    }
     throw "Unable to retrieve public IP information from ipinfo.io. $($_.Exception.Message)"
   }
 

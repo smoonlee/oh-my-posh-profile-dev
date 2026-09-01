@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.4] - 2026-09-01
+
+### Oh My Posh hook
+
+- Fix `POSH_TERMINAL_WIDTH` never refreshing after the first prompt: Oh My
+  Posh's dynamic module unconditionally redefines its own no-op
+  `Set-PoshContext` in its own scope, so a global function/alias override of
+  the same name was silently shadowed on every render. Wrap the global
+  `prompt` function instead, which reliably runs before every render.
+
+### Theme prompt segments
+
+- Raise the Copilot segment's `copilotDetailedMinSpace` threshold from `110`
+  to `120` for more headroom before it collapses to the compact view.
+
 ## [4.0.0-pre-release-0.9.3] - 2026-09-01
 
 ### Theme prompt segments

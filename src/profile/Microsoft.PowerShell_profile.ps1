@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.9.3'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.9.4'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -758,7 +758,7 @@ $ompThemePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.
 
 if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
   if (Test-Path -LiteralPath $ompThemePath -PathType Leaf) {
-    function global:Set-PwshProfilePoshContext([bool]$originalStatus) {
+    function global:Update-PwshProfilePoshTerminalWidth {
       try {
         $env:POSH_TERMINAL_WIDTH = [string]$Host.UI.RawUI.WindowSize.Width
       }
@@ -767,18 +767,25 @@ if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
       }
     }
 
-    # Seed the value for the first render and replace any hook left by a
-    # profile reload.
-    Set-PwshProfilePoshContext $true
-    Remove-Item -LiteralPath Alias:Set-PoshContext -Force -ErrorAction Ignore
+    # Seed the value for the first render.
+    Update-PwshProfilePoshTerminalWidth
     oh-my-posh init pwsh --config $ompThemePath | Invoke-Expression
 
-    # Oh My Posh's dynamic module snapshots its function table when
-    # Invoke-Expression runs, so redefining Set-PoshContext as a function
-    # afterward is never seen by its internal caller. An alias is a separate
-    # lookup and takes priority, so it reliably overrides the no-op the
-    # module just defined.
-    Set-Alias -Name Set-PoshContext -Value Set-PwshProfilePoshContext -Scope Global -Force
+    # Oh My Posh wraps its init script in a dynamic module and, inside that
+    # module's own scope, unconditionally (re)defines a no-op Set-PoshContext
+    # right before exporting it. Because `prompt` calls Set-PoshContext from
+    # within that same module scope, PowerShell always resolves it to the
+    # module's local no-op - a global function or alias of the same name is
+    # never even considered, so POSH_TERMINAL_WIDTH would only ever be set
+    # once (the seed above) and stay stale for the rest of the session.
+    # Wrapping the global `prompt` function itself is the one hook Oh My Posh
+    # actually installs into global scope, so it reliably runs before every
+    # render.
+    $script:PwshProfileOriginalPrompt = $Function:prompt
+    function global:prompt {
+      Update-PwshProfilePoshTerminalWidth
+      & $script:PwshProfileOriginalPrompt
+    }
   }
   else {
     Write-Warning "Oh My Posh theme was not found: $ompThemePath"

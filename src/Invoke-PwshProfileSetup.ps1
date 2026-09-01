@@ -1158,7 +1158,7 @@ function Update-WindowsTerminalFromNerdFontFiles {
   $fontFace = Get-NerdFontFaceName -FontFile $FontFiles[0]
   Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended terminal.integrated.fontFamily: $fontFace"
+  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended terminal.integrated.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
   Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
 }
 

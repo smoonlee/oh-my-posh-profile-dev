@@ -5,7 +5,7 @@
   "patch_pwsh_bleed": true,
   "var": {
     "dividerColor": "#d75f00",
-    "copilotDetailedMinSpace": 45
+    "copilotDetailedMinSpace": 120
   },
   "blocks": [
     {
@@ -117,12 +117,12 @@
             "{{ if ge .Premium.Percent 90 }}#da3633{{ end }}",
             "{{ if ge .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e{{ $pathLen := 0 }}{{ if .Segments.path }}{{ $pathLen = len .Segments.path.Text }}{{ end }}{{ $gitLen := 0 }}{{ if .Segments.git }}{{ $gitLen = len .Segments.git.Text }}{{ end }}{{ if ge (sub (sub (int .Env.POSH_TERMINAL_WIDTH) $pathLen) $gitLen) (int .Var.copilotDetailedMinSpace) }}  {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
+          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedMinSpace) }}  {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
           "options": {
             "http_timeout": 3000
           },
           "cache": {
-            "duration": "30s",
+            "duration": "5s",
             "strategy": "session"
           }
         },
@@ -131,9 +131,9 @@
           "style": "diamond",
           "invert_powerline": true,
           "leading_diamond": "",
-          "foreground": "#f2f3f8",
+          "foreground": "#000000",
           "background": "#d75f00",
-          "template": " \uf073 {{ .CurrentDate | date .Format }} ",
+          "template": " \uf017 {{ .CurrentDate | date .Format }} ",
           "options": {
             "time_format": "15:04:05"
           }
@@ -167,7 +167,7 @@
           "alias": "azureCli",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if not .Segments.kubernetes.Text }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
+          "template": "{{ if not .Segments.Kubernetes.Text }}{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -181,7 +181,7 @@
           "alias": "azurePwsh",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
+          "template": "{{ if and (not .Segments.Kubernetes.Text) (not .Segments.AzureCli.Text) }}{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -195,7 +195,7 @@
           "alias": "aws",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) (not .Segments.azurePwsh.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "template": "{{ if and (not .Segments.Kubernetes.Text) (not .Segments.AzureCli.Text) (not .Segments.AzurePwsh.Text) }}{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"

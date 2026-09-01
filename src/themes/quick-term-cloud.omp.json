@@ -5,7 +5,7 @@
   "patch_pwsh_bleed": true,
   "var": {
     "dividerColor": "#d75f00",
-    "copilotDetailedWidth": 140
+    "copilotDetailedMinSpace": 45
   },
   "blocks": [
     {
@@ -50,6 +50,7 @@
         },
         {
           "type": "path",
+          "alias": "path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
           "template": " {{ .Path | lower }} ",
@@ -65,7 +66,6 @@
         {
           "type": "git",
           "alias": "git",
-          "min_width": 70,
           "style": "diamond",
           "leading_diamond": "",
           "trailing_diamond": "\ue0b4",
@@ -92,17 +92,7 @@
       "overflow": "break",
       "segments": [
         {
-          "type": "status",
-          "style": "diamond",
-          "leading_diamond": "\ue0b6",
-          "invert_powerline": true,
-          "foreground": "#ffffff",
-          "background": "#da3633",
-          "template": " \uf00d {{ .Code }} "
-        },
-        {
           "type": "executiontime",
-          "min_width": 90,
           "style": "diamond",
           "leading_diamond": "\ue0b6",
           "invert_powerline": true,
@@ -127,18 +117,17 @@
             "{{ if ge .Premium.Percent 90 }}#da3633{{ end }}",
             "{{ if ge .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }} {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }} {{ .Premium.Percent }}%{{ end }} ",
+          "template": " \uec1e{{ $pathLen := 0 }}{{ if .Segments.path }}{{ $pathLen = len .Segments.path.Text }}{{ end }}{{ $gitLen := 0 }}{{ if .Segments.git }}{{ $gitLen = len .Segments.git.Text }}{{ end }}{{ if ge (sub (sub (int .Env.POSH_TERMINAL_WIDTH) $pathLen) $gitLen) (int .Var.copilotDetailedMinSpace) }}  {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
           "options": {
             "http_timeout": 3000
           },
           "cache": {
-            "duration": "5m",
+            "duration": "30s",
             "strategy": "session"
           }
         },
         {
           "type": "time",
-          "min_width": 80,
           "style": "diamond",
           "invert_powerline": true,
           "leading_diamond": "",
@@ -155,11 +144,16 @@
       "type": "prompt",
       "alignment": "left",
       "newline": true,
+      "segments": []
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
       "segments": [
         {
           "type": "kubectl",
           "alias": "kubernetes",
-          "min_width": 80,
           "style": "plain",
           "foreground": "#ffffff",
           "template": "╰─ \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
@@ -171,7 +165,6 @@
         {
           "type": "az",
           "alias": "azureCli",
-          "min_width": 90,
           "style": "plain",
           "foreground": "#ffffff",
           "template": "{{ if not .Segments.kubernetes.Text }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
@@ -186,7 +179,6 @@
         {
           "type": "az",
           "alias": "azurePwsh",
-          "min_width": 160,
           "style": "plain",
           "foreground": "#ffffff",
           "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
@@ -201,7 +193,6 @@
         {
           "type": "aws",
           "alias": "aws",
-          "min_width": 120,
           "style": "plain",
           "foreground": "#ffffff",
           "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) (not .Segments.azurePwsh.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",

@@ -3212,8 +3212,31 @@ function Start-PwshProfileReplacementSession {
     throw "PowerShell executable was not found: $powerShellExecutable"
   }
 
+  $deferredFullPaths = @(
+    $DeferredPaths |
+      Where-Object { $_ } |
+      ForEach-Object { [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) }
+  )
+  $pathSeparator = [System.IO.Path]::PathSeparator
+  $originalPSModulePath = $env:PSModulePath
+  $replacementPSModulePath = @(
+    [string]$originalPSModulePath -split [regex]::Escape([string]$pathSeparator) |
+      Where-Object { $_ } |
+      Where-Object {
+      $modulePath = [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+      -not @($deferredFullPaths | Where-Object {
+          $modulePath.Equals($_, [System.StringComparison]::OrdinalIgnoreCase) -or
+          $modulePath.StartsWith("$_$([System.IO.Path]::DirectorySeparatorChar)", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $modulePath.StartsWith("$_$([System.IO.Path]::AltDirectorySeparatorChar)", [System.StringComparison]::OrdinalIgnoreCase)
+        }).Count
+    }
+  ) -join $pathSeparator
+
   $pathsJson = ConvertTo-Json -InputObject @($DeferredPaths) -Compress
+  $replacementPSModulePathEscaped = $replacementPSModulePath.Replace("'", "''")
   $replacementScript = @"
+`$env:PSModulePath = '$replacementPSModulePathEscaped'
+Remove-Module -Name PSReadLine -Force -ErrorAction SilentlyContinue
 `$paths = @(ConvertFrom-Json -InputObject '$($pathsJson.Replace("'", "''"))')
 Wait-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
 `$failedPaths = @()
@@ -3253,7 +3276,13 @@ if (`$paths.Count -gt 0 -and `$failedPaths.Count -eq 0) {
     $encodedCommand
   )
 
-  Start-Process -FilePath $powerShellExecutable -ArgumentList $arguments -NoNewWindow -PassThru -ErrorAction Stop
+  try {
+    $env:PSModulePath = $replacementPSModulePath
+    Start-Process -FilePath $powerShellExecutable -ArgumentList $arguments -NoNewWindow -PassThru -ErrorAction Stop
+  }
+  finally {
+    $env:PSModulePath = $originalPSModulePath
+  }
 }
 
 function Test-PwshProfileSymbolicLink {

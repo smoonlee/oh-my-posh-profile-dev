@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.1] - 2026-09-01
+
+### Theme polish
+
+- Refine the Git prompt segment with always-visible, explicit counters for
+  untracked, modified/added, deleted, staged, and stashed changes.
+- Use clearer source-control icons for Git state, including a saved/floppy icon
+  for stashes and a diff-removed icon for deleted files.
+- Switch the Copilot segment base color to a GitHub/Primer-style purple and
+  make the compact usage spacing explicit.
+
+### Maintenance
+
+- Move Dependabot's GitHub Actions update schedule to Monday morning in the
+  Europe/London timezone and simplify its commit-message prefix.
+
 ## [4.0.0-pre-release-0.9] - 2026-09-01
 
 ### Profile status display
@@ -275,7 +291,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
-[Unreleased]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.8...HEAD
+[4.0.0-pre-release-0.9.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.9...v4.0.0-pre-release-0.9.1
+[4.0.0-pre-release-0.9]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.8...v4.0.0-pre-release-0.9
 [4.0.0-pre-release-0.8]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7.1...v4.0.0-pre-release-0.8
 [4.0.0-pre-release-0.7.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7...v4.0.0-pre-release-0.7.1
 [4.0.0-pre-release-0.7]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.6...v4.0.0-pre-release-0.7

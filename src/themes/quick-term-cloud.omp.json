@@ -2,39 +2,24 @@
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "version": 4,
   "final_space": true,
+  "async": true,
   "patch_pwsh_bleed": true,
-  "palette": {
-    "accent": "#d75f00",
-    "white": "#ffffff",
-    "soft-white": "#f2f3f8",
-    "black": "#111111",
-    "danger": "#da3633",
-    "warning": "#d29922",
-    "path": "#0087af",
-    "git-clean": "#52c77a",
-    "git-modified": "#ffa94d",
-    "git-diverged": "#f78c8c",
-    "git-ahead": "#66b3ff",
-    "git-behind": "#ff9966",
-    "copilot": "#8957e5",
-    "execution-background": "#e4e4e4",
-    "execution-foreground": "#585858"
-  },
   "var": {
-    "dividerColor": "#d75f00",
-    "copilotDetailedWidth": 140
+    "dividerColor": "#d75f00"
   },
   "blocks": [
     {
       "type": "prompt",
       "alignment": "left",
-      "newline": false,
+      "newline": true,
       "segments": [
         {
           "type": "os",
           "style": "diamond",
-          "foreground": "p:soft-white",
-          "background": "p:accent",
+          "leading_diamond": "",
+          "trailing_diamond": "",
+          "foreground": "#f2f3f8",
+          "background": "#d75f00",
           "template": "  {{ .Icon }}  ",
           "options": {
             "windows": "\ue70f",
@@ -57,17 +42,19 @@
         {
           "type": "text",
           "style": "diamond",
-          "foreground": "p:white",
-          "background": "p:danger",
+          "leading_diamond": "",
+          "trailing_diamond": "",
+          "foreground": "#ffffff",
+          "background": "#da3633",
           "template": "{{ if .Root }} \uf071 ELEVATED {{ end }}"
         },
         {
           "type": "path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
-          "foreground": "p:white",
-          "background": "p:path",
           "template": " {{ .Path | lower }} ",
+          "foreground": "#ffffff",
+          "background": "#0087af",
           "options": {
             "style": "agnoster_short",
             "max_depth": 3,
@@ -80,13 +67,17 @@
           "alias": "git",
           "min_width": 70,
           "style": "diamond",
+          "leading_diamond": "",
           "trailing_diamond": "\ue0b4",
-          "foreground": "p:black",
-          "background": "p:git-clean",
+          "foreground": "#000000",
+          "background": "#52c77a",
           "background_templates": [
-            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}p:git-diverged{{ else if gt .Ahead 0 }}p:git-ahead{{ else if gt .Behind 0 }}p:git-behind{{ else if or .Working.Changed .Staging.Changed }}p:git-modified{{ end }}"
+            "{{ if or (.Working.Changed) (.Staging.Changed) }}#ffa94d{{ end }}",
+            "{{ if and (gt .Ahead 0) (gt .Behind 0) }}#f78c8c{{ end }}",
+            "{{ if gt .Ahead 0 }}#66b3ff{{ end }}",
+            "{{ if gt .Behind 0 }}#ff9966{{ end }}"
           ],
-          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }} ",
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }}",
           "options": {
             "branch_icon": "\uf418 ",
             "fetch_status": true,
@@ -98,16 +89,24 @@
     {
       "type": "prompt",
       "alignment": "right",
-      "overflow": "hide",
       "segments": [
+        {
+          "type": "status",
+          "style": "diamond",
+          "leading_diamond": "\ue0b6",
+          "invert_powerline": true,
+          "foreground": "#ffffff",
+          "background": "#da3633",
+          "template": " \uf071 {{ .Code }} "
+        },
         {
           "type": "executiontime",
           "min_width": 90,
           "style": "diamond",
           "leading_diamond": "\ue0b6",
           "invert_powerline": true,
-          "foreground": "p:execution-foreground",
-          "background": "p:execution-background",
+          "foreground": "#585858",
+          "background": "#e4e4e4",
           "template": " \ueba2 {{ .FormattedMs }} ",
           "options": {
             "style": "austin",
@@ -117,21 +116,22 @@
         {
           "type": "copilot",
           "alias": "copilot",
-          "min_width": 100,
+          "min_width": 140,
           "style": "powerline",
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
-          "foreground": "p:black",
-          "background": "p:copilot",
+          "foreground": "#111111",
+          "background": "#8957e5",
           "background_templates": [
-            "{{ if ge .Premium.Percent 90 }}p:danger{{ else if ge .Premium.Percent 70 }}p:warning{{ end }}"
+            "{{ if gt .Premium.Percent 90 }}#da3633{{ end }}",
+            "{{ if gt .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }}  {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
+          "template": " \uec1e {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}% ",
           "options": {
-            "http_timeout": 1000
+            "http_timeout": 5000
           },
           "cache": {
-            "duration": "1m",
+            "duration": "5m",
             "strategy": "session"
           }
         },
@@ -140,8 +140,9 @@
           "min_width": 80,
           "style": "diamond",
           "invert_powerline": true,
-          "foreground": "p:soft-white",
-          "background": "p:accent",
+          "leading_diamond": "",
+          "foreground": "#f2f3f8",
+          "background": "#d75f00",
           "template": " \uf073 {{ .CurrentDate | date .Format }} ",
           "options": {
             "time_format": "15:04:05"
@@ -157,7 +158,7 @@
         {
           "type": "text",
           "style": "plain",
-          "foreground": "p:accent",
+          "foreground": "#d75f00",
           "template": "\u2570\u2500"
         },
         {
@@ -165,16 +166,24 @@
           "alias": "kubernetes",
           "min_width": 80,
           "style": "plain",
-          "foreground": "p:white",
-          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}"
+          "foreground": "#ffffff",
+          "template": " \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
+          "cache": {
+            "duration": "30s",
+            "strategy": "session"
+          }
         },
         {
           "type": "az",
           "alias": "azure-cli",
           "min_width": 90,
           "style": "plain",
-          "foreground": "p:white",
+          "foreground": "#ffffff",
           "template": " <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          },
           "options": {
             "source": "cli"
           }
@@ -184,8 +193,12 @@
           "alias": "azure-pwsh",
           "min_width": 110,
           "style": "plain",
-          "foreground": "p:white",
+          "foreground": "#ffffff",
           "template": " <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          },
           "options": {
             "source": "pwsh"
           }
@@ -195,8 +208,12 @@
           "alias": "aws",
           "min_width": 120,
           "style": "plain",
-          "foreground": "p:white",
-          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}"
+          "foreground": "#ffffff",
+          "template": " <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "cache": {
+            "duration": "1m",
+            "strategy": "session"
+          }
         }
       ]
     },
@@ -208,8 +225,10 @@
         {
           "type": "text",
           "style": "plain",
-          "foreground": "p:accent",
-          "foreground_templates": ["{{ if .Root }}p:danger{{ end }}"],
+          "foreground": "#d75f00",
+          "foreground_templates": [
+            "{{ if .Root }}#da3633{{ end }}"
+          ],
           "template": "{{ if .Root }}#{{ else }}${{ end }}"
         }
       ]

@@ -58,7 +58,7 @@
           "options": {
             "style": "agnoster_short",
             "max_depth": 3,
-            "folder_icon": "\u2026",
+            "folder_icon": "…",
             "folder_separator_icon": " <transparent>\ue0b1</> "
           }
         },
@@ -77,9 +77,9 @@
             "{{ if gt .Ahead 0 }}#66b3ff{{ end }}",
             "{{ if gt .Behind 0 }}#ff9966{{ end }}"
           ],
-          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uf044 {{ .Working.String }}{{ else }} \uf044 0{{ end }}{{ if .Staging.Changed }} \uf046 {{ .Staging.String }}{{ else }} \uf046 0{{ end }} \ueb4a {{ .StashCount }}",
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }} \uf016 {{ .Working.Untracked }} \uf044 {{ add .Working.Added .Working.Modified }} \uf458 {{ .Working.Deleted }}{{ if gt .Working.Unmerged 0 }} \uf071 {{ .Working.Unmerged }}{{ end }} \uf046 {{ add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked }} \uf0c7 {{ .StashCount }}",
           "options": {
-            "branch_icon": "\uf418 ",
+            "branch_icon": "\ue0a0 ",
             "fetch_status": true,
             "fetch_upstream_icon": true
           }
@@ -122,12 +122,12 @@
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
           "foreground": "#111111",
-          "background": "#8957e5",
+          "background": "#8250df",
           "background_templates": [
             "{{ if ge .Premium.Percent 90 }}#da3633{{ end }}",
             "{{ if ge .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e {{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }} {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }}{{ .Premium.Percent }}%{{ end }} ",
+          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedWidth) }} {{ .Premium.Percent.GaugeUsed }} Used:{{ .Premium.Percent }}%{{ else }} {{ .Premium.Percent }}%{{ end }} ",
           "options": {
             "http_timeout": 3000
           },
@@ -162,7 +162,7 @@
           "min_width": 80,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "\u2570\u2500 \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
+          "template": "╰─ \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
           "cache": {
             "duration": "30s",
             "strategy": "session"
@@ -174,7 +174,7 @@
           "min_width": 90,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if not .Segments.kubernetes.Text }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
+          "template": "{{ if not .Segments.kubernetes.Text }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -189,7 +189,7 @@
           "min_width": 160,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
+          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"
@@ -204,7 +204,7 @@
           "min_width": 120,
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) (not .Segments.azurePwsh.Text) }}\u2570\u2500{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "template": "{{ if and (not .Segments.kubernetes.Text) (not .Segments.azureCli.Text) (not .Segments.azurePwsh.Text) }}╰─{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
             "duration": "1m",
             "strategy": "session"

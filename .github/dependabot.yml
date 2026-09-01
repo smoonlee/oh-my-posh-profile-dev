@@ -5,11 +5,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
-      day: sunday
-      time: '05:00'
-      timezone: Etc/UTC
+      day: monday
+      time: '08:00'
+      timezone: Europe/London
     assignees:
       - smoonlee
     commit-message:
-      prefix: '[Dependabot Update] ::'
+      prefix: '[Dependabot Update] '
     open-pull-requests-limit: 5

@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.5] - 2026-09-07
+
+### PwshProfile.EndOfLife 1.0.1
+
+- Refresh the supported product catalog and tab completion from endoflife.date.
+- Added products: `metabase`.
+- Lifecycle dates continue to be fetched live when queried.
+
 ## [4.0.0-pre-release-0.9.4] - 2026-09-01
 
 ### Oh My Posh hook

@@ -16,17 +16,21 @@ recalculates its bump from that branch rather than incrementing the PR again.
 The release preparation script expects the catalog captured before refreshing;
 it fails if that baseline is missing.
 
-Review and merge the automation PR. Its merge publishes a GitHub Release tagged
-with the prepared profile version (`v` prefix), copies the corresponding
+Review and merge the automation PR. Its merge creates a draft GitHub Release
+tagged with the prepared profile version (`v` prefix), copies the corresponding
 changelog section into the release notes, detects prerelease versions, and
 dispatches the existing workflow to validate and upload the immutable module and
-profile assets. Users then receive them through `Update-PwshProfile` on their
-chosen release channel. Closing the PR without merging publishes nothing.
+profile assets. The release is published only after every asset, including
+`PwshProfile.release.json`, has uploaded successfully. Users then receive it
+through `Update-PwshProfile` on their chosen release channel. Closing the PR
+without merging publishes nothing, and a packaging failure leaves a draft that
+update checks cannot select.
 
 The asset workflow also retains its `release: published` trigger for releases
 created manually. Automated releases explicitly dispatch it because GitHub does
 not start another workflow from a release created with `GITHUB_TOKEN`. Uploads
-use `--clobber`, so rerunning the release job repairs or replaces its assets.
+use `--clobber`, so rerunning the release job repairs or replaces its assets
+before publication.
 
 Catalog refreshes use patch releases; use minor releases for new functionality.
 Review upstream removals before merging because removed names stop being accepted.

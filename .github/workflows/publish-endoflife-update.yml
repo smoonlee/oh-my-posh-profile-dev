@@ -45,7 +45,7 @@ jobs:
           "RELEASE_NOTES_PATH=$notesPath" >> $env:GITHUB_ENV
           "RELEASE_PRERELEASE=$($version.Contains('-'))" >> $env:GITHUB_ENV
 
-      - name: Create and publish GitHub Release
+      - name: Create draft GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +63,8 @@ jobs:
               'release', 'create', $env:RELEASE_TAG,
               '--target', $env:TARGET_SHA,
               '--title', $env:RELEASE_TAG,
-              '--notes-file', $env:RELEASE_NOTES_PATH
+              '--notes-file', $env:RELEASE_NOTES_PATH,
+              '--draft'
             )
             if ([Convert]::ToBoolean($env:RELEASE_PRERELEASE)) {
               $arguments += '--prerelease'
@@ -76,4 +77,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run publish-profile-release.yml --ref $env:RELEASE_TAG -f release_tag=$env:RELEASE_TAG
+        run: |
+          gh workflow run publish-profile-release.yml `
+            --ref ${{ github.event.repository.default_branch }} `
+            -f release_tag=$env:RELEASE_TAG

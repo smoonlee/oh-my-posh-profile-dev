@@ -48,7 +48,7 @@ $generatedBlock = @(
   "$indent[ValidateSet("
   ($generatedValues -join ",`n")
   "$indent)]"
-  "$indent[Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]"
+  "$indent[Parameter(Mandatory, Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName, ParameterSetName = 'Query')]"
   "$indent[Alias('Product')]"
   "$indent[string] `$ProductName"
   $endMarker

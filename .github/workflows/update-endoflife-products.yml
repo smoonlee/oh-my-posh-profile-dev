@@ -32,6 +32,11 @@ jobs:
         shell: pwsh
         run: ./scripts/Update-EndOfLifeProducts.ps1
 
+      - name: Prepare patch release and module changelog
+        shell: pwsh
+        run: |
+          ./scripts/Update-EndOfLifeRelease.ps1 -PreviousCatalogPath (Join-Path $env:RUNNER_TEMP 'EndOfLifeProducts.previous.json')
+
       - name: Build pull request summary
         id: product-changes
         shell: pwsh
@@ -45,6 +50,7 @@ jobs:
           }
 
           $body = ./scripts/Get-EndOfLifeProductChanges.ps1 @parameters
+          $body += "`n`n## Release preparation`n`nCatalog changes include an EndOfLife module patch bump, a profile patch/prerelease increment, and a module section in CHANGELOG.md. Merging this automation PR publishes the matching GitHub Release and starts immutable asset publication automatically."
           $delimiter = "END_OF_LIFE_$([guid]::NewGuid().ToString('N'))"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "body<<$delimiter" -Encoding utf8
           Add-Content -Path $env:GITHUB_OUTPUT -Value $body -Encoding utf8
@@ -59,6 +65,9 @@ jobs:
           add-paths: |
             EndOfLifeProducts.json
             src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psm1
+            src/modules/PwshProfile.EndOfLife/PwshProfile.EndOfLife.psd1
+            src/profile/Microsoft.PowerShell_profile.ps1
+            CHANGELOG.md
           commit-message: 'Update endoflife.date products'
           title: '[GitHub Action]: Update endoflife.date products'
           body: ${{ steps.product-changes.outputs.body }}

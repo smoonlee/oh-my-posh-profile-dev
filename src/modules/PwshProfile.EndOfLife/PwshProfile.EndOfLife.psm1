@@ -409,6 +409,7 @@ function Get-EolInfo {
         'mediawiki',
         'meilisearch',
         'memcached',
+        'metabase',
         'metallb',
         'micronaut',
         'microsoft-build-of-openjdk',

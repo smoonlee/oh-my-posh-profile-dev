@@ -1,85 +1,85 @@
 [CmdletBinding()]
 param (
   # This region is refreshed by scripts/Update-NerdFontsCatalog.ps1.
-  # BEGIN GENERATED NERD FONT VALIDATESET
-  [ValidateSet(
-    '0xProto',
-    '3270',
-    'AdwaitaMono',
-    'Agave',
-    'AnnotationM',
-    'AnonymicePro',
-    'Arimo',
-    'AtkynsonMono',
-    'AurulentSansM',
-    'BigBlueTerm',
-    'BitstromWera',
-    'BlexMono',
-    'CaskaydiaCove',
-    'CaskaydiaMono',
-    'CodeNewRoman',
-    'ComicShannsMono',
-    'CommitMono',
-    'Cousine',
-    'D2KodingLigature',
-    'DaddyTimeMono',
-    'DejaVuSansM',
-    'DepartureMono',
-    'DroidSansM',
-    'EnvyCodeR',
-    'FantasqueSansM',
-    'FiraCode',
-    'FiraMono',
-    'GeistMono',
-    'GohuFont',
-    'GoMono',
-    'GoogleSansCode',
-    'Hack',
-    'Hasklug',
-    'HeavyData',
-    'Hurmit',
-    'iMWriting',
-    'Inconsolata',
-    'Inconsolata LGC',
-    'InconsolataGo',
-    'IntoneMono',
-    'Iosevka',
-    'IosevkaTerm',
-    'IosevkaTermSlab',
-    'JetBrainsMono',
-    'Lekton',
-    'Lilex',
-    'LiterationMono',
-    'M+',
-    'MartianMono',
-    'MesloLG',
-    'Monaspice',
-    'Monofur',
-    'Monoid',
-    'Mononoki',
-    'Noto',
-    'OpenDyslexic',
-    'Overpass',
-    'ProFont',
-    'ProggyClean',
-    'RecMono',
-    'RobotoMono',
-    'SauceCodePro',
-    'ShureTechMono',
-    'SpaceMono',
-    'Symbols',
-    'Terminess',
-    'Tinos',
-    'Ubuntu',
-    'UbuntuMono',
-    'UbuntuSans',
-    'VictorMono',
-    'ZedMono'
-  )]
-  [Parameter(Position = 0)]
-  [Alias('NerdFont')]
-  [string] $nerdFontName
-  # END GENERATED NERD FONT VALIDATESET
+	# BEGIN GENERATED NERD FONT VALIDATESET
+	[ValidateSet(
+		'0xProto',
+		'3270',
+		'AdwaitaMono',
+		'Agave',
+		'AnnotationM',
+		'AnonymicePro',
+		'Arimo',
+		'AtkynsonMono',
+		'AurulentSansM',
+		'BigBlueTerm',
+		'BitstromWera',
+		'BlexMono',
+		'CaskaydiaCove',
+		'CaskaydiaMono',
+		'CodeNewRoman',
+		'ComicShannsMono',
+		'CommitMono',
+		'Cousine',
+		'D2KodingLigature',
+		'DaddyTimeMono',
+		'DejaVuSansM',
+		'DepartureMono',
+		'DroidSansM',
+		'EnvyCodeR',
+		'FantasqueSansM',
+		'FiraCode',
+		'FiraMono',
+		'GeistMono',
+		'GohuFont',
+		'GoMono',
+		'GoogleSansCode',
+		'Hack',
+		'Hasklug',
+		'HeavyData',
+		'Hurmit',
+		'iMWriting',
+		'Inconsolata',
+		'Inconsolata LGC',
+		'InconsolataGo',
+		'IntoneMono',
+		'Iosevka',
+		'IosevkaTerm',
+		'IosevkaTermSlab',
+		'JetBrainsMono',
+		'Lekton',
+		'Lilex',
+		'LiterationMono',
+		'M+',
+		'MartianMono',
+		'MesloLG',
+		'Monaspice',
+		'Monofur',
+		'Monoid',
+		'Mononoki',
+		'Noto',
+		'OpenDyslexic',
+		'Overpass',
+		'ProFont',
+		'ProggyClean',
+		'RecMono',
+		'RobotoMono',
+		'SauceCodePro',
+		'ShureTechMono',
+		'SpaceMono',
+		'Symbols',
+		'Terminess',
+		'Tinos',
+		'Ubuntu',
+		'UbuntuMono',
+		'UbuntuSans',
+		'VictorMono',
+		'ZedMono'
+	)]
+	[Parameter(Position = 0)]
+	[Alias('NerdFont')]
+	[string] $nerdFontName = ''
+	# END GENERATED NERD FONT VALIDATESET
 
   ,
   [ValidateSet('All', 'NerdFont', 'Winget', 'Modules', 'Profile', 'ProfileUpdate')]
@@ -1158,7 +1158,7 @@ function Update-WindowsTerminalFromNerdFontFiles {
   $fontFace = Get-NerdFontFaceName -FontFile $FontFiles[0]
   Update-WindowsTerminalFontFace -FontFace $fontFace -StartingDirectory $startingDirectory -PostInstall:$PostInstall -SettingsPaths $SettingsPaths
   Write-Host ''
-  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended terminal.integrated.fontFamily: $fontFace"
+  Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended terminal.integrated.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
   Write-PwshProfileStatus -Stage 'VS Code' -Message "Recommended editor.fontFamily: '$fontFace', Consolas, 'Courier New', monospace"
 }
 
@@ -3212,8 +3212,31 @@ function Start-PwshProfileReplacementSession {
     throw "PowerShell executable was not found: $powerShellExecutable"
   }
 
+  $deferredFullPaths = @(
+    $DeferredPaths |
+      Where-Object { $_ } |
+      ForEach-Object { [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) }
+  )
+  $pathSeparator = [System.IO.Path]::PathSeparator
+  $originalPSModulePath = $env:PSModulePath
+  $replacementPSModulePath = @(
+    [string]$originalPSModulePath -split [regex]::Escape([string]$pathSeparator) |
+      Where-Object { $_ } |
+      Where-Object {
+      $modulePath = [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+      -not @($deferredFullPaths | Where-Object {
+          $modulePath.Equals($_, [System.StringComparison]::OrdinalIgnoreCase) -or
+          $modulePath.StartsWith("$_$([System.IO.Path]::DirectorySeparatorChar)", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $modulePath.StartsWith("$_$([System.IO.Path]::AltDirectorySeparatorChar)", [System.StringComparison]::OrdinalIgnoreCase)
+        }).Count
+    }
+  ) -join $pathSeparator
+
   $pathsJson = ConvertTo-Json -InputObject @($DeferredPaths) -Compress
+  $replacementPSModulePathEscaped = $replacementPSModulePath.Replace("'", "''")
   $replacementScript = @"
+`$env:PSModulePath = '$replacementPSModulePathEscaped'
+Remove-Module -Name PSReadLine -Force -ErrorAction SilentlyContinue
 `$paths = @(ConvertFrom-Json -InputObject '$($pathsJson.Replace("'", "''"))')
 Wait-Process -Id $ParentProcessId -ErrorAction SilentlyContinue
 `$failedPaths = @()
@@ -3253,7 +3276,13 @@ if (`$paths.Count -gt 0 -and `$failedPaths.Count -eq 0) {
     $encodedCommand
   )
 
-  Start-Process -FilePath $powerShellExecutable -ArgumentList $arguments -NoNewWindow -PassThru -ErrorAction Stop
+  try {
+    $env:PSModulePath = $replacementPSModulePath
+    Start-Process -FilePath $powerShellExecutable -ArgumentList $arguments -NoNewWindow -PassThru -ErrorAction Stop
+  }
+  finally {
+    $env:PSModulePath = $originalPSModulePath
+  }
 }
 
 function Test-PwshProfileSymbolicLink {

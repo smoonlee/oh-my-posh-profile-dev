@@ -5,6 +5,57 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.4] - 2026-09-01
+
+### Oh My Posh hook
+
+- Fix `POSH_TERMINAL_WIDTH` never refreshing after the first prompt: Oh My
+  Posh's dynamic module unconditionally redefines its own no-op
+  `Set-PoshContext` in its own scope, so a global function/alias override of
+  the same name was silently shadowed on every render. Wrap the global
+  `prompt` function instead, which reliably runs before every render.
+
+### Theme prompt segments
+
+- Raise the Copilot segment's `copilotDetailedMinSpace` threshold from `110`
+  to `120` for more headroom before it collapses to the compact view.
+
+## [4.0.0-pre-release-0.9.3] - 2026-09-01
+
+### Theme prompt segments
+
+- Remove `min_width` gating from the `kubectl`, `azureCli`, `azurePwsh`, `aws`,
+  `git`, `executiontime`, and `time` segments so they always render regardless
+  of terminal width; only the Copilot segment's detail level still adapts to
+  available space.
+- Add a blank line between the path/Git line and the kubectl/az/aws context
+  line for visual separation.
+
+## [4.0.0-pre-release-0.9.2] - 2026-09-01
+
+### Theme prompt
+
+- Lower the Copilot usage segment's cache duration from `5m` to `30s` so the
+  usage percentage refreshes far more often.
+- Show the Copilot segment's full `Used: X%` detail based on the space left
+  after the path and Git segments render, instead of gating it on raw
+  terminal width, so it collapses to a compact icon/percentage only when the
+  path and Git status actually need the room.
+- Remove the right-aligned exit-code `status` segment.
+
+## [4.0.0-pre-release-0.9.1.1] - 2026-09-01
+
+### Copilot spacing
+
+- Restore the Copilot usage segment's `0.8`-style icon spacing while keeping the
+  clearer `Used: 11%` detailed label formatting.
+
+### Reset
+
+- Prevent the automatic post-reset PowerShell replacement session from
+  inheriting user module paths that can lock the PowerShell configuration folder
+  before deferred cleanup runs.
+
 ## [4.0.0-pre-release-0.9.1] - 2026-09-01
 
 ### Theme polish
@@ -291,6 +342,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   profile version before replacing installed files.
 - Removed the mutable `main` branch theme fallback from profile startup.
 
+[4.0.0-pre-release-0.9.3]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.9.2...v4.0.0-pre-release-0.9.3
+[4.0.0-pre-release-0.9.2]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.9.1.1...v4.0.0-pre-release-0.9.2
+[4.0.0-pre-release-0.9.1.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.9.1...v4.0.0-pre-release-0.9.1.1
 [4.0.0-pre-release-0.9.1]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.9...v4.0.0-pre-release-0.9.1
 [4.0.0-pre-release-0.9]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.8...v4.0.0-pre-release-0.9
 [4.0.0-pre-release-0.8]: https://github.com/smoonlee/oh-my-posh-profile-dev/compare/v4.0.0-pre-release-0.7.1...v4.0.0-pre-release-0.8

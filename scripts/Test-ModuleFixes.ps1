@@ -44,10 +44,12 @@ try {
   $split = Split-PfxCertificate $pfx.OutputPath -Password $password -Force
   if (-not (Test-CertificateKeyMatch $split.CertificatePath $split.PrivateKeyPath -KeyPassword $password).IsMatch) { throw 'Split key mismatch' }
   $tls = Get-Module PwshProfile.TlsCertificate
-  # EphemeralKeySet avoids a CI-only CryptoAPI/user-profile failure
-  # ("network password is not correct") when loading a PFX by password.
-  $certificateObject = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
-    $pfx.OutputPath, 'SyntheticRegression42', [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
+  # Load the plain (password-free) certificate file rather than the PFX: some
+  # CI Windows runners fail ANY password-protected PKCS12 import via
+  # CryptoAPI with a misleading "network password is not correct" error,
+  # regardless of key storage flags. RawData is identical either way, so
+  # this still verifies fingerprint consistency between .NET and OpenSSL.
+  $certificateObject = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cert.CertificatePath)
   try {
     $hash = & $tls { param($cert) Get-TlsCertificateFingerprint $cert } $certificateObject
     if ($hash -ne (Get-TlsCertificate -Path $cert.CertificatePath).Thumbprint) { throw 'Fingerprint mismatch' }

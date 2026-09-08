@@ -15,6 +15,14 @@ function Assert-Throws([scriptblock]$Action, [string]$Pattern) {
   try { & $Action; throw 'Expected failure was not raised' }
   catch { if ($_.Exception.Message -notlike $Pattern) { throw } }
 }
+function New-LoopbackTcpListener {
+  # CI Windows runners occasionally fail socket construction with a spurious
+  # "network password is not correct" WinSock initialization error; retry.
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try { return [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0) }
+    catch { if ($attempt -eq 3) { throw }; Start-Sleep -Milliseconds (500 * $attempt) }
+  }
+}
 try {
   $cert = New-SelfSignedTlsCertificate test.invalid -DnsName test.invalid -OutputDirectory $root
   $keyHash = (Get-FileHash $cert.PrivateKeyPath).Hash
@@ -39,7 +47,7 @@ try {
     if ($hash -ne (Get-TlsCertificate -Path $cert.CertificatePath).Thumbprint) { throw 'Fingerprint mismatch' }
   }
   finally { $certificateObject.Dispose() }
-  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  $listener = New-LoopbackTcpListener
   $listener.Start()
   $accept = $listener.AcceptTcpClientAsync()
   $timer = [Diagnostics.Stopwatch]::StartNew()
@@ -53,7 +61,7 @@ try {
   }
   'PASS: silent TLS endpoint is bounded by timeout.'
 
-  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  $listener = New-LoopbackTcpListener
   $listener.Start(); $port = $listener.LocalEndpoint.Port; $listener.Stop()
   $info = [Diagnostics.ProcessStartInfo]::new()
   $info.FileName = (Get-Command openssl).Source

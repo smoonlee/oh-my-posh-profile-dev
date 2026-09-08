@@ -44,7 +44,10 @@ try {
   $split = Split-PfxCertificate $pfx.OutputPath -Password $password -Force
   if (-not (Test-CertificateKeyMatch $split.CertificatePath $split.PrivateKeyPath -KeyPassword $password).IsMatch) { throw 'Split key mismatch' }
   $tls = Get-Module PwshProfile.TlsCertificate
-  $certificateObject = [Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx.OutputPath, 'SyntheticRegression42')
+  # EphemeralKeySet avoids a CI-only CryptoAPI/user-profile failure
+  # ("network password is not correct") when loading a PFX by password.
+  $certificateObject = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+    $pfx.OutputPath, 'SyntheticRegression42', [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
   try {
     $hash = & $tls { param($cert) Get-TlsCertificateFingerprint $cert } $certificateObject
     if ($hash -ne (Get-TlsCertificate -Path $cert.CertificatePath).Thumbprint) { throw 'Fingerprint mismatch' }

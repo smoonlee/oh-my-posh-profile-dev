@@ -1,8 +1,6 @@
 name: Publish Pwsh Profile Release
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -30,8 +28,11 @@ jobs:
         run: |
           $tag = if ($env:EVENT_RELEASE_TAG) { $env:EVENT_RELEASE_TAG } else { $env:INPUT_RELEASE_TAG }
           $release = gh release view $tag --repo $env:GITHUB_REPOSITORY --json tagName,targetCommitish,publishedAt,isDraft,isPrerelease | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read release metadata.' }
+          if (-not $release.isDraft) { throw 'Only draft releases can be packaged. Published assets cannot be replaced.' }
           $publishedAt = if ($release.publishedAt) { $release.publishedAt } else { [DateTime]::UtcNow.ToString('o') }
-          $releaseRef = if ($release.isDraft) { $release.targetCommitish } else { $release.tagName }
+          $releaseRef = gh api "repos/$env:GITHUB_REPOSITORY/commits/$($release.tagName)" --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $releaseRef -notmatch '^[a-f0-9]{40}$') { throw 'Create the release tag before packaging.' }
           "RELEASE_TAG=$($release.tagName)" >> $env:GITHUB_ENV
           "RELEASE_REF=$releaseRef" >> $env:GITHUB_ENV
           "RELEASE_PUBLISHED_AT=$publishedAt" >> $env:GITHUB_ENV
@@ -214,6 +215,7 @@ jobs:
             channel = $channel
             publishedAt = $env:RELEASE_PUBLISHED_AT
             repository = '${{ github.repository }}'
+            commit = $env:RELEASE_REF
             minimumPowerShellVersion = '5.1'
             artifacts = $assets
           }
@@ -227,6 +229,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $draft = gh release view $env:RELEASE_TAG --json isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $draft.isDraft) { throw 'Assets may only be uploaded to a draft release.' }
           gh release upload $env:RELEASE_TAG `
             (Join-Path $env:assetRoot 'Microsoft.PowerShell_profile.ps1') `
             (Join-Path $env:assetRoot 'quick-term-cloud.omp.json') `
@@ -250,6 +254,7 @@ jobs:
             (Join-Path $env:assetRoot 'NerdFontsCatalog.json') `
             (Join-Path $env:assetRoot 'PwshProfile.release.json') `
             --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }
 
       - name: Publish completed draft release
         if: env.RELEASE_DRAFT == 'true'
@@ -257,6 +262,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          $release = gh release view $env:RELEASE_TAG --json isDraft,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $release.isDraft) { throw 'Release must remain a draft until verification completes.' }
+          $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:RELEASE_TAG" --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:RELEASE_REF) { throw 'Release tag changed during packaging.' }
+          $verifyRoot = Join-Path $env:RUNNER_TEMP 'verify-profile-release'
+          New-Item -ItemType Directory -Path $verifyRoot -Force | Out-Null
+          gh release download $env:RELEASE_TAG --dir $verifyRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify uploaded assets.' }
+          foreach ($file in Get-ChildItem -LiteralPath $env:assetRoot -File) {
+            $download = Join-Path $verifyRoot $file.Name
+            if (-not (Test-Path -LiteralPath $download) -or (Get-FileHash $download).Hash -ne (Get-FileHash $file.FullName).Hash) {
+              throw "Uploaded asset verification failed: $($file.Name)"
+            }
+          }
           gh release edit $env:RELEASE_TAG `
             --draft=false `
             --prerelease=$env:RELEASE_PRERELEASE
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish verified draft release.' }

@@ -1,11 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
   "version": 4,
-  "final_space": true,
   "patch_pwsh_bleed": true,
   "var": {
     "dividerColor": "#d75f00",
-    "copilotDetailedMinSpace": 120
+    "copilotLayoutReserve": 25
   },
   "blocks": [
     {
@@ -18,7 +17,7 @@
           "style": "diamond",
           "leading_diamond": "",
           "trailing_diamond": "",
-          "foreground": "#f2f3f8",
+          "foreground": "#ffffff",
           "background": "#d75f00",
           "template": "  {{ .Icon }}  ",
           "options": {
@@ -41,6 +40,7 @@
         },
         {
           "type": "text",
+          "alias": "Elevated",
           "style": "diamond",
           "leading_diamond": "",
           "trailing_diamond": "",
@@ -50,7 +50,7 @@
         },
         {
           "type": "path",
-          "alias": "path",
+          "alias": "Path",
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
           "template": " {{ .Path | lower }} ",
@@ -65,7 +65,7 @@
         },
         {
           "type": "git",
-          "alias": "git",
+          "alias": "Git",
           "style": "diamond",
           "leading_diamond": "",
           "trailing_diamond": "\ue0b4",
@@ -77,11 +77,9 @@
             "{{ if gt .Ahead 0 }}#66b3ff{{ end }}",
             "{{ if gt .Behind 0 }}#ff9966{{ end }}"
           ],
-          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }} \uf016 {{ .Working.Untracked }} \uf044 {{ add .Working.Added .Working.Modified }} \uf458 {{ .Working.Deleted }}{{ if gt .Working.Unmerged 0 }} \uf071 {{ .Working.Unmerged }}{{ end }} \uf046 {{ add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked }} \uf0c7 {{ .StashCount }}",
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if gt .Working.Untracked 0 }} \uf016 {{ .Working.Untracked }}{{ end }}{{ if gt (add .Working.Added .Working.Modified) 0 }} \uf044 {{ add .Working.Added .Working.Modified }}{{ end }}{{ if gt .Working.Deleted 0 }} \uf458 {{ .Working.Deleted }}{{ end }}{{ if gt .Working.Unmerged 0 }} \uf071 {{ .Working.Unmerged }}{{ end }}{{ if gt (add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked) 0 }} \uf046 {{ add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked }}{{ end }}{{ if gt .StashCount 0 }} \uf0c7 {{ .StashCount }}{{ end }}",
           "options": {
-            "branch_icon": "\ue0a0 ",
-            "fetch_status": true,
-            "fetch_upstream_icon": true
+            "branch_icon": "\ue0a0 "
           }
         }
       ]
@@ -111,18 +109,18 @@
           "style": "powerline",
           "powerline_symbol": "\ue0b2",
           "invert_powerline": true,
-          "foreground": "#111111",
+          "foreground": "#000000",
           "background": "#8250df",
           "background_templates": [
             "{{ if ge .Premium.Percent 90 }}#da3633{{ end }}",
             "{{ if ge .Premium.Percent 70 }}#d29922{{ end }}"
           ],
-          "template": " \uec1e{{ if ge (int .Env.POSH_TERMINAL_WIDTH) (int .Var.copilotDetailedMinSpace) }}  {{ .Premium.Percent.GaugeUsed }} Used: {{ .Premium.Percent }}%{{ else }}  {{ .Premium.Percent }}%{{ end }} ",
+          "template": "{{ $occupied := printf \"%s%s%s%s%s\" (.Segments.Os.Text | default \"\") (.Segments.Elevated.Text | default \"\") (.Segments.Path.Text | default \"\") (.Segments.Git.Text | default \"\") (.Segments.Executiontime.Text | default \"\") }}{{ $occupied = regexReplaceAll \"<[^>]*>\" $occupied \"\" }}{{ $available := sub (int .Env.POSH_TERMINAL_WIDTH) (add (len (regexFindAll \".\" $occupied -1)) (int .Var.copilotLayoutReserve)) }}{{ $full := printf \" \\uec1e  %s Used: %v%% \" .Premium.Percent.GaugeUsed .Premium.Percent }}{{ $compact := printf \" \\uec1e  %v%% \" .Premium.Percent }}{{ if ge $available (int64 (len (regexFindAll \".\" $full -1))) }}{{ $full }}{{ else if ge $available (int64 (len (regexFindAll \".\" $compact -1))) }}{{ $compact }}{{ end }}",
           "options": {
             "http_timeout": 3000
           },
           "cache": {
-            "duration": "5s",
+            "duration": "1m",
             "strategy": "session"
           }
         },
@@ -153,23 +151,23 @@
       "segments": [
         {
           "type": "kubectl",
-          "alias": "kubernetes",
+          "alias": "Kubernetes",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "╰─ \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
+          "template": "\u2570\u2500 \udb84\udcfe : {{ .Context }}{{ if .Namespace }} :: {{ .Namespace }}{{ end }}",
           "cache": {
-            "duration": "30s",
+            "duration": "none",
             "strategy": "session"
           }
         },
         {
           "type": "az",
-          "alias": "azureCli",
+          "alias": "AzureCli",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if not .Segments.Kubernetes.Text }}{{ end }} <{{ .Var.dividerColor }}>||</> \uebd8 : {{ .Name }}",
+          "template": "{{ if .Segments.Kubernetes.Text }} <{{ .Var.dividerColor }}>||</> {{ else }}\u2570\u2500 {{ end }}\uebd8 : {{ .Name }}",
           "cache": {
-            "duration": "1m",
+            "duration": "none",
             "strategy": "session"
           },
           "options": {
@@ -178,12 +176,12 @@
         },
         {
           "type": "az",
-          "alias": "azurePwsh",
+          "alias": "AzurePwsh",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.Kubernetes.Text) (not .Segments.AzureCli.Text) }}{{ end }} <{{ .Var.dividerColor }}>||</> \ue683 : {{ .Name }}",
+          "template": "{{ if or .Segments.Kubernetes.Text .Segments.AzureCli.Text }} <{{ .Var.dividerColor }}>||</> {{ else }}\u2570\u2500 {{ end }}\ue683 : {{ .Name }}",
           "cache": {
-            "duration": "1m",
+            "duration": "none",
             "strategy": "session"
           },
           "options": {
@@ -192,12 +190,12 @@
         },
         {
           "type": "aws",
-          "alias": "aws",
+          "alias": "Aws",
           "style": "plain",
           "foreground": "#ffffff",
-          "template": "{{ if and (not .Segments.Kubernetes.Text) (not .Segments.AzureCli.Text) (not .Segments.AzurePwsh.Text) }}{{ end }} <{{ .Var.dividerColor }}>||</> \udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
+          "template": "{{ if or .Segments.Kubernetes.Text .Segments.AzureCli.Text .Segments.AzurePwsh.Text }} <{{ .Var.dividerColor }}>||</> {{ else }}\u2570\u2500 {{ end }}\udb83\ude0f : {{ .Profile }}{{ if .Region }}@{{ .Region }}{{ end }}",
           "cache": {
-            "duration": "1m",
+            "duration": "none",
             "strategy": "session"
           }
         }
@@ -215,7 +213,7 @@
           "foreground_templates": [
             "{{ if .Root }}#da3633{{ end }}"
           ],
-          "template": "{{ if .Root }}#{{ else }}${{ end }}"
+          "template": "{{ if .Root }}# {{ else }}$ {{ end }}"
         }
       ]
     }

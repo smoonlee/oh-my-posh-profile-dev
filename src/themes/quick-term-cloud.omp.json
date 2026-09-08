@@ -79,9 +79,7 @@
           ],
           "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if gt .Working.Untracked 0 }} \uf016 {{ .Working.Untracked }}{{ end }}{{ if gt (add .Working.Added .Working.Modified) 0 }} \uf044 {{ add .Working.Added .Working.Modified }}{{ end }}{{ if gt .Working.Deleted 0 }} \uf458 {{ .Working.Deleted }}{{ end }}{{ if gt .Working.Unmerged 0 }} \uf071 {{ .Working.Unmerged }}{{ end }}{{ if gt (add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked) 0 }} \uf046 {{ add .Staging.Added .Staging.Modified .Staging.Deleted .Staging.Unmerged .Staging.Untracked }}{{ end }}{{ if gt .StashCount 0 }} \uf0c7 {{ .StashCount }}{{ end }}",
           "options": {
-            "branch_icon": "\ue0a0 ",
-            "fetch_status": true,
-            "fetch_upstream_icon": true
+            "branch_icon": "\ue0a0 "
           }
         }
       ]

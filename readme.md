@@ -213,9 +213,10 @@ release check, including its channel and tag. `Get-PwshProfile` reports the loca
 version, latest published Stable and Preview versions, the persisted OTA channel
 preference, and optional module status. `OptionalModules` includes each module's
 enabled state, installed manifest version, bundle version, latest bundle version,
-and update flag. Optional modules are updated with the selected profile release,
-so `ModulesAvailableForUpdate` lists every optional module when a newer release
-is available. The remote versions are queried only when the command is run;
+latest independent module version (where available), and update flag. Optional
+modules can be updated with a profile bundle or their own module release, so any
+`PwshProfile.*` module can be listed in `ModulesAvailableForUpdate` without a
+newer profile release. Remote versions are queried only when the command is run;
 profile startup does not wait for that request. At most once per day, startup launches a
 hidden child PowerShell process to query the configured GitHub Release channel. A
 later profile start or reload displays a notification when the cached release is
@@ -358,7 +359,10 @@ Get-DnsResult -Domain example.com -RecordType MX
 ```
 
 `Get-DnsResult` resolves DNS records using `Resolve-DnsName` on Windows, or
-falls back to `dig` on platforms where `Resolve-DnsName` is unavailable. Use
+falls back to `dig` on platforms where `Resolve-DnsName` is unavailable. CAA
+also requires `dig` on Windows versions whose native resolver lacks that record
+type; install an ISC BIND dig client and put it on PATH. The fallback honours
+`-Server`. Failed queries in `-All` produce warnings rather than disappearing. Use
 `-RecordType` to query A, AAAA, CNAME, MX, NS, PTR, SOA, SRV, TXT, or CAA
 records, and `-Server` to query a specific DNS server. `-Domain` also accepts a
 full URL such as `https://example.com`; the scheme and path are stripped
@@ -385,14 +389,14 @@ Get-TlsCertificate -HostName example.com
 
 `Get-TlsCertificate` connects to a remote host and port (default 443) using
 .NET's `SslStream` to report the certificate's subject, issuer, validity dates,
-days remaining, and thumbprint, or reads a local certificate file with
+days remaining, and SHA-256 thumbprint, or reads a local certificate file with
 `-Path`. `-HostName` also accepts a full URL such as `https://example.com`; the
-scheme, port, and path are parsed automatically. Add `-ShowChain` to walk and
-print the full certificate chain of trust (leaf, intermediates, and root) as
-sent by the server during the handshake:
+scheme, port, and path are parsed automatically. `-TimeoutSec` bounds both TCP
+connection and TLS handshake. Add `-ShowChain` to include the inspected chain in
+the returned object's `Chain` property, then format it when desired:
 
 ```powershell
-Get-TlsCertificate -HostName example.com -ShowChain
+(Get-TlsCertificate -HostName example.com -ShowChain).Chain | Format-Table
 ```
 
 The module also includes OpenSSL-backed helpers (requires
@@ -401,7 +405,8 @@ certificate, and intermediate chain from a `.pfx`; `New-PfxCertificate` to
 package them back into a `.pfx`; `Test-CertificateKeyMatch` to verify a
 certificate and private key belong together; and
 `New-SelfSignedTlsCertificate` to generate a self-signed certificate and key
-for local development. Disable the module with:
+for local development. Creation and splitting refuse existing output files unless
+`-Force` is supplied, and stage their outputs before replacing files. Disable the module with:
 
 ```powershell
 Set-PwshProfile -EnableTlsCertificate:$false
@@ -434,6 +439,12 @@ These ideas are not implemented yet, but fit naturally under
   replacement or final manifest write fails, the previous files are restored.
 5. Writes `version.json` last and asks you to open a new PowerShell session.
 
+After the profile-bundle check, the command discovers independently published
+`PwshProfile.<Name>-v*` releases. When a newer module version exists, it
+downloads only that module's manifest, root script, declared format files, and
+checksum manifest; validates them; then atomically replaces only that module's
+files. The profile version and unrelated modules remain unchanged.
+
 `Update-PwshProfile` uses the persisted channel preference. Either channel can
 still be selected explicitly for one invocation:
 
@@ -461,8 +472,13 @@ published. Before creating a release:
 The workflow validates the tag and embedded version; parses the profile, setup
 script, module scripts, theme, module manifests, and Nerd Fonts catalog; computes
 SHA-256 hashes from the tagged files; generates `PwshProfile.release.json`; and
-uploads all twenty-one release assets. It does not overwrite an existing release asset.
+uploads all twenty-one release assets.
 Release notes are maintained in [`CHANGELOG.md`](CHANGELOG.md).
+
+Module manifest version changes use the **Publish Pwsh Profile Module Updates**
+workflow and each module's changelog. They publish only the changed module's
+declared assets under a `PwshProfile.<Name>-v<version>` tag; see
+[`docs/release-automation.md`](docs/release-automation.md).
 
 ### Dynamic prompt updates
 

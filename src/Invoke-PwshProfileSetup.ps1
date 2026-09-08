@@ -1953,37 +1953,33 @@ function Get-PwshProfileGitHubRelease {
     [switch] $Prerelease
   )
 
-  if (-not $Prerelease) {
-    try {
-      $release = Invoke-RestMethod `
-        -Uri "https://api.github.com/repos/$Repository/releases/latest" `
-        -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-        -TimeoutSec 15 `
-        -ErrorAction Stop
-    } catch {
-      # GitHub returns 404 for "no releases published"; treat that as "none found" rather than a hard failure.
-      if ([int]$_.Exception.Response.StatusCode -eq 404) {
-        return $null
-      }
-      throw "Could not query the latest stable GitHub Release for $Repository. $($_.Exception.Message)"
-    }
-    if ($release.draft -or $release.prerelease) {
-      throw 'The latest stable GitHub Release metadata is invalid.'
-    }
-    return $release
-  }
-
   try {
-    $releases = Invoke-RestMethod `
-      -Uri "https://api.github.com/repos/$Repository/releases?per_page=20" `
+    $releases = @(Invoke-RestMethod `
+      -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
       -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
       -TimeoutSec 15 `
-      -ErrorAction Stop
+      -ErrorAction Stop)
   } catch {
     if ([int]$_.Exception.Response.StatusCode -eq 404) {
       return $null
     }
     throw "Could not query GitHub Releases for $Repository. $($_.Exception.Message)"
+  }
+  if (-not $Prerelease) {
+    $release = $null
+    $selectedVersion = $null
+    foreach ($candidate in @($releases | Where-Object { -not $_.draft -and -not $_.prerelease })) {
+      if ([string]$candidate.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+        continue
+      }
+      $candidateVersion = $Matches.version
+      if (-not $release -or
+        (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
+        $release = $candidate
+        $selectedVersion = $candidateVersion
+      }
+    }
+    return $release
   }
   $release = $null
   $selectedVersion = $null
@@ -2851,6 +2847,271 @@ function Invoke-PwshProfileUpdate {
   return $true
 }
 
+function Get-PwshProfileModuleGitHubRelease {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $ModuleName,
+
+    [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
+
+    [switch] $Prerelease,
+
+    [object[]] $Releases
+  )
+
+  if (-not $PSBoundParameters.ContainsKey('Releases')) {
+    try {
+      $Releases = @(Invoke-RestMethod `
+        -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
+        -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop)
+    } catch {
+      throw "Could not query module releases for $ModuleName. $($_.Exception.Message)"
+    }
+  }
+
+  $escapedName = [regex]::Escape($ModuleName)
+  $selected = $null
+  $selectedVersion = $null
+  foreach ($candidate in @($Releases | Where-Object { -not $_.draft })) {
+    if ([string]$candidate.tag_name -notmatch "^$escapedName-v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$") {
+      continue
+    }
+    $candidateVersion = $Matches.version
+    $isPrerelease = [bool]$Matches.prerelease
+    if ([bool]$candidate.prerelease -ne $isPrerelease -or ($isPrerelease -and -not $Prerelease)) {
+      continue
+    }
+    if (-not $selected -or
+      (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
+      $selected = $candidate
+      $selectedVersion = $candidateVersion
+    }
+  }
+  $selected
+}
+
+function Invoke-PwshProfileModuleUpdate {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory)]
+    [string] $ModuleName,
+
+    [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
+
+    [switch] $Prerelease,
+
+    [object[]] $Releases
+  )
+
+  $releaseParameters = @{
+    ModuleName = $ModuleName
+    Repository = $Repository
+    Prerelease = $Prerelease
+  }
+  if ($PSBoundParameters.ContainsKey('Releases')) { $releaseParameters.Releases = $Releases }
+  $release = Get-PwshProfileModuleGitHubRelease @releaseParameters
+  if (-not $release) {
+    Write-PwshProfileStatus -Stage 'Module' -Type Current -Message "No independent release is published for $ModuleName."
+    return $true
+  }
+  if ([string]$release.tag_name -notmatch "-v(?<version>[^/]+)$") {
+    throw "Module release tag '$($release.tag_name)' is invalid."
+  }
+  $latestVersion = $Matches.version
+  $paths = Get-PwshProfileLocalStorePaths
+  $moduleRoot = Join-Path $paths.Modules $ModuleName
+  $installedManifestPath = Join-Path $moduleRoot "$ModuleName.psd1"
+  $installedVersion = '0.0.0'
+  if (Test-Path -LiteralPath $installedManifestPath -PathType Leaf) {
+    try {
+      $installedVersion = [string](Import-PowerShellDataFile -LiteralPath $installedManifestPath -ErrorAction Stop).ModuleVersion
+    } catch {
+      throw "The installed $ModuleName manifest is invalid. $($_.Exception.Message)"
+    }
+  }
+  if ((Compare-PwshProfileSemanticVersion -Left $latestVersion -Right $installedVersion) -le 0) {
+    Write-PwshProfileStatus -Stage 'Module' -Type Current -Message "$ModuleName $installedVersion is already up to date."
+    return $true
+  }
+
+  Write-PwshProfileHeader -Title "$ModuleName Update" -Subtitle 'Verified Independent Module Release'
+  Write-PwshProfileStatus -Stage 'Update' -Message "Installed version: $installedVersion"
+  Write-PwshProfileStatus -Stage 'Update' -Message "Selected release: $($release.tag_name)"
+  if (-not (Test-Path -LiteralPath $moduleRoot -PathType Container)) {
+    New-Item -ItemType Directory -Path $moduleRoot -Force | Out-Null
+  }
+  $releaseAssets = @{}
+  foreach ($asset in @($release.assets)) {
+    $releaseAssets[[string]$asset.name] = [string]$asset.browser_download_url
+  }
+  $releaseManifestName = "$ModuleName.release.json"
+  if (-not $releaseAssets.ContainsKey($releaseManifestName)) {
+    throw "Release $($release.tag_name) does not contain $releaseManifestName."
+  }
+  $temporaryManifest = Join-Path $moduleRoot ".$releaseManifestName.$PID.tmp"
+  try {
+    Save-PwshProfileReleaseAsset -Uri $releaseAssets[$releaseManifestName] -Destination $temporaryManifest
+    $releaseManifest = Get-Content -LiteralPath $temporaryManifest -Raw | ConvertFrom-Json -ErrorAction Stop
+  } finally {
+    Remove-Item -LiteralPath $temporaryManifest -Force -ErrorAction SilentlyContinue
+  }
+  if ($releaseManifest.schemaVersion -ne 1 -or
+    [string]$releaseManifest.module -ne $ModuleName -or
+    [string]$releaseManifest.version -ne $latestVersion -or
+    [string]$releaseManifest.tag -ne [string]$release.tag_name -or
+    [string]$releaseManifest.repository -ne $Repository) {
+    throw 'The independent module manifest does not match the GitHub Release metadata.'
+  }
+
+  $artifactNames = [ordered]@{}
+  foreach ($property in $releaseManifest.artifacts.PSObject.Properties) {
+    $assetName = [string]$property.Value.asset
+    if ($property.Name -notmatch '^[A-Za-z][A-Za-z0-9]*$' -or
+      [IO.Path]::GetFileName($assetName) -ne $assetName -or
+      $assetName -notmatch "^$([regex]::Escape($ModuleName))(?:\.[A-Za-z0-9.-]+)?\.(?:psd1|psm1|ps1xml)$") {
+      throw "The module release contains an invalid artifact '$assetName'."
+    }
+    $artifactNames[$property.Name] = $assetName
+  }
+  if (-not $artifactNames.Contains('manifest') -or -not $artifactNames.Contains('script')) {
+    throw 'The module release must contain manifest and script artifacts.'
+  }
+  $staged = @{}
+  try {
+    foreach ($name in $artifactNames.Keys) {
+      $assetName = $artifactNames[$name]
+      $artifact = $releaseManifest.artifacts.$name
+      $expectedHash = [string]$artifact.sha256
+      if ([string]$artifact.asset -ne $assetName -or
+        $expectedHash -notmatch '^[a-fA-F0-9]{64}$' -or
+        -not $releaseAssets.ContainsKey($assetName)) {
+        throw "The module release manifest entry for '$name' is invalid."
+      }
+      $staged[$name] = Join-Path $moduleRoot ".$assetName.$PID.update"
+      Save-PwshProfileReleaseAsset -Uri $releaseAssets[$assetName] -Destination $staged[$name]
+      $actualHash = (Get-FileHash -LiteralPath $staged[$name] -Algorithm SHA256).Hash
+      if ($actualHash -ine $expectedHash) { throw "SHA-256 verification failed for '$assetName'." }
+      Write-PwshProfileStatus -Stage 'Verify' -Type Success -Message "$assetName ($($actualHash.ToLowerInvariant()))"
+    }
+    Test-PwshProfileScriptFile -Path $staged.script -Label "$ModuleName module"
+    $candidateManifest = Import-PowerShellDataFile -LiteralPath $staged.manifest -ErrorAction Stop
+    if ([string]$candidateManifest.ModuleVersion -ne $latestVersion) {
+      throw "The module manifest does not declare version '$latestVersion'."
+    }
+    if ([string]$candidateManifest.RootModule -ne $artifactNames.script) {
+      throw 'The module release does not contain the declared RootModule.'
+    }
+    foreach ($formatName in @($candidateManifest.FormatsToProcess | Where-Object { $_ })) {
+      if ([string]$formatName -notin @($artifactNames.Values)) {
+        throw "The module release does not contain declared format file '$formatName'."
+      }
+    }
+    foreach ($name in @($artifactNames.Keys | Where-Object { $artifactNames[$_] -like '*.ps1xml' })) {
+      $null = [xml](Get-Content -LiteralPath $staged[$name] -Raw -ErrorAction Stop)
+    }
+  } catch {
+    foreach ($path in $staged.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+    throw "Module release validation failed; no installed files were changed. $($_.Exception.Message)"
+  }
+
+  $wasLoaded = [bool](Get-Module -Name $ModuleName)
+  if ($wasLoaded) { Remove-Module -Name $ModuleName -Force -ErrorAction SilentlyContinue }
+  $timestamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddHHmmss') + '.' + [guid]::NewGuid().ToString('N')
+  $backups = @{}
+  $installed = [System.Collections.Generic.List[string]]::new()
+  try {
+    foreach ($name in $artifactNames.Keys) {
+      $destination = Join-Path $moduleRoot $artifactNames[$name]
+      $backup = "$destination.$timestamp.bak"
+      Install-PwshProfileAtomicFile -StagedPath $staged[$name] -Destination $destination -BackupPath $backup
+      $backups[$name] = $backup
+      $installed.Add($name)
+      Write-PwshProfileStatus -Stage 'Install' -Type Success -Message "[Updated] $destination"
+    }
+    # Treat a failed import as an installation failure and restore the old files.
+    if ($wasLoaded) { Import-Module -Name $installedManifestPath -Global -Force -ErrorAction Stop }
+  } catch {
+    $installFailure = $_
+    $rollbackErrors = @()
+    if ($wasLoaded) { Remove-Module -Name $ModuleName -Force -ErrorAction SilentlyContinue }
+    foreach ($name in @($installed)) {
+      $destination = Join-Path $moduleRoot $artifactNames[$name]
+      try {
+        if (Test-Path -LiteralPath $backups[$name] -PathType Leaf) {
+          Copy-Item -LiteralPath $backups[$name] -Destination $destination -Force -ErrorAction Stop
+        }
+        else {
+          Remove-Item -LiteralPath $destination -Force -ErrorAction Stop
+        }
+      }
+      catch { $rollbackErrors += $_.Exception.Message }
+    }
+    if ($wasLoaded) {
+      try { Import-Module -Name $installedManifestPath -Global -Force -ErrorAction Stop }
+      catch { $rollbackErrors += "Could not reload previous module: $($_.Exception.Message)" }
+    }
+    if ($rollbackErrors.Count) {
+      throw "Module installation failed: $($installFailure.Exception.Message) Rollback was incomplete: $($rollbackErrors -join '; '). Backups were retained."
+    }
+    throw "Module installation failed; previous files and loaded state were restored. $($installFailure.Exception.Message)"
+  } finally {
+    foreach ($path in $staged.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+  }
+  Write-PwshProfileStatus -Stage 'Complete' -Type Success -Message "Updated $ModuleName to $latestVersion."
+  Write-Host ''
+  return $true
+}
+
+function Invoke-PwshProfileIndependentModuleUpdates {
+  [CmdletBinding()]
+  param (
+    [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
+    [switch] $Prerelease
+  )
+
+  try {
+    $releases = @(Invoke-RestMethod `
+      -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
+      -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
+      -TimeoutSec 15 `
+      -ErrorAction Stop)
+  } catch {
+    Write-PwshProfileStatus -Stage 'Module' -Type Warning -Message "Could not query independent module releases. $($_.Exception.Message)"
+    return $false
+  }
+
+  $moduleNames = @(
+    foreach ($release in $releases) {
+      if (-not $release.draft -and
+        [string]$release.tag_name -match '^(?<moduleName>PwshProfile\.[A-Za-z0-9_.-]+)-v') {
+        $Matches.moduleName
+      }
+    }
+  ) | Sort-Object -Unique
+  $paths = Get-PwshProfileLocalStorePaths
+  $success = $true
+  foreach ($moduleName in $moduleNames) {
+    $manifestPath = Join-Path $paths.Modules "$moduleName\$moduleName.psd1"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { continue }
+    try {
+      if (-not (Invoke-PwshProfileModuleUpdate `
+        -ModuleName $moduleName `
+        -Repository $Repository `
+        -Prerelease:$Prerelease `
+        -Releases $releases)) {
+        $success = $false
+      }
+    } catch {
+      Write-PwshProfileStatus -Stage 'Module' -Type Warning -Message "$moduleName update failed. $($_.Exception.Message)"
+      $success = $false
+    }
+  }
+  return $success
+}
+
 function Invoke-GitHubConfiguration {
   [CmdletBinding()]
   param ()
@@ -3623,4 +3884,7 @@ if ($RunPhase -in @('All', 'Profile')) {
 
 if ($RunPhase -eq 'ProfileUpdate') {
   [void](Invoke-PwshProfileUpdate -Prerelease:$Prerelease -LocalSource:$LocalSource)
+  if (-not $LocalSource) {
+    [void](Invoke-PwshProfileIndependentModuleUpdates -Prerelease:$Prerelease)
+  }
 }

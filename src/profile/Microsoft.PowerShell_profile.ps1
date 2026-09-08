@@ -108,16 +108,26 @@ function global:Get-PwshProfile {
 
   $stableVersion = $null
   $previewVersion = $null
+  $latestIndependentModuleVersions = @{}
   $remoteQuerySucceeded = $false
   if (-not $SettingsOnly) {
     try {
       $releases = Invoke-RestMethod `
-        -Uri 'https://api.github.com/repos/smoonlee/oh-my-posh-profile-dev/releases?per_page=20' `
+        -Uri 'https://api.github.com/repos/smoonlee/oh-my-posh-profile-dev/releases?per_page=100' `
         -Headers @{ 'User-Agent' = 'pwsh-profile-status' } `
         -TimeoutSec 15 `
         -ErrorAction Stop
       $remoteQuerySucceeded = $true
       foreach ($release in @($releases | Where-Object { -not $_.draft })) {
+        if ([string]$release.tag_name -match '^(?<moduleName>PwshProfile\.[A-Za-z0-9_.-]+)-v(?<moduleVersion>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$' -and
+          -not $release.prerelease) {
+          $candidateModuleName = $Matches.moduleName
+          $candidateModuleVersion = $Matches.moduleVersion
+          if (-not $latestIndependentModuleVersions.ContainsKey($candidateModuleName) -or
+            (Compare-PwshProfileSemanticVersion -Left $candidateModuleVersion -Right $latestIndependentModuleVersions[$candidateModuleName]) -gt 0) {
+            $latestIndependentModuleVersions[$candidateModuleName] = $candidateModuleVersion
+          }
+        }
         if ([string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
           continue
         }
@@ -183,15 +193,15 @@ function global:Get-PwshProfile {
   else {
     $stableVersion
   }
-  $moduleUpdateAvailable = $false
+  $bundleUpdateAvailable = $false
   if ($selectedRemoteVersion) {
     try {
-      $moduleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
+      $bundleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
         -Left $selectedRemoteVersion `
         -Right $global:PwshProfileVersion) -gt 0
     }
     catch {
-      $moduleUpdateAvailable = $false
+      $bundleUpdateAvailable = $false
     }
   }
 
@@ -209,6 +219,20 @@ function global:Get-PwshProfile {
         }
         catch {
           $moduleVersion = 'Invalid manifest'
+        }
+      }
+
+      $latestModuleVersion = if ($latestIndependentModuleVersions.ContainsKey($module.Name)) {
+        $latestIndependentModuleVersions[$module.Name]
+      } else { $null }
+      $moduleUpdateAvailable = $bundleUpdateAvailable
+      if ($moduleInstalled -and $moduleVersion -and $latestModuleVersion) {
+        try {
+          $moduleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
+            -Left $latestModuleVersion `
+            -Right $moduleVersion) -gt 0
+        } catch {
+          $moduleUpdateAvailable = $false
         }
       }
 
@@ -231,6 +255,7 @@ function global:Get-PwshProfile {
         ModuleVersion = $moduleVersion
         BundleVersion = $global:PwshProfileVersion
         LatestBundleVersion = $selectedRemoteVersion
+        LatestModuleVersion = $latestModuleVersion
         UpdateAvailable = $moduleUpdateAvailable
         Status = $moduleStatusText
         Path = $modulePath
@@ -270,12 +295,7 @@ function global:Get-PwshProfile {
     OptionalModules = $moduleStatuses
     EnabledModules = @($moduleStatuses | Where-Object Enabled | Select-Object -ExpandProperty Name)
     DisabledModules = @($moduleStatuses | Where-Object { -not $_.Enabled } | Select-Object -ExpandProperty Name)
-    ModulesAvailableForUpdate = if ($moduleUpdateAvailable) {
-      @($moduleStatuses | Select-Object -ExpandProperty Name)
-    }
-    else {
-      @()
-    }
+    ModulesAvailableForUpdate = @($moduleStatuses | Where-Object UpdateAvailable | Select-Object -ExpandProperty Name)
     ConfigPath = $configPath
   }
 
@@ -622,6 +642,21 @@ function Start-PwshProfileUpdateCheck {
     }
   }
 
+  if ($state -and $state.latestModules) {
+    foreach ($moduleRelease in $state.latestModules.PSObject.Properties) {
+      $moduleManifestPath = Join-Path $StorePath "modules\$($moduleRelease.Name)\$($moduleRelease.Name).psd1"
+      if (-not (Test-Path -LiteralPath $moduleManifestPath -PathType Leaf)) { continue }
+      try {
+        $installedModuleVersion = [string](Import-PowerShellDataFile $moduleManifestPath).ModuleVersion
+        if ((Compare-PwshProfileSemanticVersion -Left ([string]$moduleRelease.Value.version) -Right $installedModuleVersion) -gt 0) {
+          Write-Warning "$($moduleRelease.Name) Update Available: $($moduleRelease.Value.tag). Run Update-PwshProfile to install it."
+        }
+      } catch {
+        # Ignore invalid cached or installed module metadata.
+      }
+    }
+  }
+
   $checkedAt = [DateTimeOffset]::MinValue
   if ($state -and $state.checkedAt) {
     [void][DateTimeOffset]::TryParse([string]$state.checkedAt, [ref]$checkedAt)
@@ -642,12 +677,13 @@ function Start-PwshProfileUpdateCheck {
   }
 
   $pendingState = [ordered]@{
-    schemaVersion = 2
+    schemaVersion = 3
     channel = $channel
     checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
     latestVersion = if ($state -and $state.channel -eq $channel) { $state.latestVersion } else { $null }
     latestTag = if ($state -and $state.channel -eq $channel) { $state.latestTag } else { $null }
     releaseUrl = if ($state -and $state.channel -eq $channel) { $state.releaseUrl } else { $null }
+    latestModules = if ($state -and $state.latestModules) { $state.latestModules } else { [ordered]@{} }
     error = $null
   }
   $pendingJson = $pendingState | ConvertTo-Json -Depth 3
@@ -666,17 +702,18 @@ $repository = '__REPOSITORY__'
 $prerelease = [bool]::Parse('__PRERELEASE__')
 $channel = if ($prerelease) { 'prerelease' } else { 'stable' }
 $state = [ordered]@{
-  schemaVersion = 2
+  schemaVersion = 3
   channel = $channel
   checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
   latestVersion = $null
   latestTag = $null
   releaseUrl = $null
+  latestModules = [ordered]@{}
   error = $null
 }
 try {
+  $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases?per_page=100" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
   if ($prerelease) {
-    $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases?per_page=20" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
     $release = $null
     $selectedVersion = $null
     foreach ($candidate in @($releases | Where-Object { -not $_.draft -and $_.prerelease })) {
@@ -692,20 +729,43 @@ try {
     }
   }
   else {
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases/latest" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
-    if ($release.draft -or $release.prerelease -or
-      [string]$release.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
-      throw 'The latest stable release tag is not valid SemVer.'
+    $release = $null
+    $selectedVersion = $null
+    foreach ($candidate in @($releases | Where-Object { -not $_.draft -and -not $_.prerelease })) {
+      if ([string]$candidate.tag_name -notmatch '^v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)$') {
+        continue
+      }
+      $candidateVersion = $Matches.version
+      if (-not $release -or
+        (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $selectedVersion) -gt 0) {
+        $release = $candidate
+        $selectedVersion = $candidateVersion
+      }
     }
-    $selectedVersion = $Matches.version
   }
 
-  if (-not $release) {
-    throw "No published $channel release is available."
+  if ($release) {
+    $state.latestVersion = $selectedVersion
+    $state.latestTag = [string]$release.tag_name
+    $state.releaseUrl = [string]$release.html_url
+  } else {
+    $state.error = "No published $channel profile release is available."
   }
-  $state.latestVersion = $selectedVersion
-  $state.latestTag = [string]$release.tag_name
-  $state.releaseUrl = [string]$release.html_url
+  foreach ($candidate in @($releases | Where-Object { -not $_.draft -and -not $_.prerelease })) {
+    if ([string]$candidate.tag_name -notmatch '^(?<moduleName>PwshProfile\.[A-Za-z0-9_.-]+)-v(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$') {
+      continue
+    }
+    $moduleName = $Matches.moduleName
+    $candidateVersion = $Matches.version
+    $currentModule = $state.latestModules[$moduleName]
+    if (-not $currentModule -or
+      (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $currentModule.version) -gt 0) {
+      $state.latestModules[$moduleName] = [ordered]@{
+        version = $candidateVersion
+        tag = [string]$candidate.tag_name
+      }
+    }
+  }
 }
 catch {
   $state.error = $_.Exception.Message
@@ -771,20 +831,63 @@ if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
     Update-PwshProfilePoshTerminalWidth
     oh-my-posh init pwsh --config $ompThemePath | Invoke-Expression
 
-    # Oh My Posh wraps its init script in a dynamic module and, inside that
-    # module's own scope, unconditionally (re)defines a no-op Set-PoshContext
-    # right before exporting it. Because `prompt` calls Set-PoshContext from
-    # within that same module scope, PowerShell always resolves it to the
-    # module's local no-op - a global function or alias of the same name is
-    # never even considered, so POSH_TERMINAL_WIDTH would only ever be set
-    # once (the seed above) and stay stale for the rest of the session.
-    # Wrapping the global `prompt` function itself is the one hook Oh My Posh
-    # actually installs into global scope, so it reliably runs before every
-    # render.
-    $script:PwshProfileOriginalPrompt = $Function:prompt
-    function global:prompt {
-      Update-PwshProfilePoshTerminalWidth
-      & $script:PwshProfileOriginalPrompt
+    function Install-PwshProfilePoshContext {
+      param([System.Management.Automation.PSModuleInfo] $Module)
+
+      # Install in the scope where OMP resolves its context hook. OMP captures
+      # command status before calling it; wrapping prompt would overwrite $?.
+      & $Module {
+        if (-not (Get-Variable PwshProfilePreviousContext -Scope Script -ErrorAction Ignore)) {
+          $script:PwshProfilePreviousContext = ${function:Set-PoshContext}
+        }
+        function script:Set-PoshContext {
+          param($originalStatus)
+          if ($script:PwshProfilePreviousContext) {
+            & $script:PwshProfilePreviousContext $originalStatus
+          }
+          Update-PwshProfilePoshTerminalWidth
+        }
+      }
+    }
+    $poshModule = Get-Module -Name oh-my-posh-core
+    if ($poshModule) {
+      Install-PwshProfilePoshContext -Module $poshModule
+    }
+
+    function global:Update-PwshProfilePoshIdleLayout {
+      # OnIdle runs on the PowerShell event loop, not on a background timer.
+      # Keep all console editing on that thread and leave typed input alone.
+      try {
+        $width = $Host.UI.RawUI.WindowSize.Width
+        if ($width -le 0 -or [string]$width -eq $env:POSH_TERMINAL_WIDTH) { return }
+
+        $line = ''
+        $cursor = 0
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+        if ($line.Length -ne 0) { return }
+
+        # Record the attempt before repainting so a host that cannot redraw
+        # does not retry on every idle event. The normal prompt also updates it.
+        $env:POSH_TERMINAL_WIDTH = [string]$width
+        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+      }
+      catch {
+        # Unsupported console hosts retain the normal next-prompt refresh.
+      }
+    }
+
+    # Reloading the profile replaces only our subscription, not other idle hooks.
+    Get-EventSubscriber -SourceIdentifier PowerShell.OnIdle -ErrorAction Ignore |
+      Where-Object { $_.Action.Name -eq 'PwshProfile.PoshResize' } |
+      ForEach-Object {
+        Unregister-Event -SubscriptionId $_.SubscriptionId
+        if ($_.Action) { Remove-Job -Job $_.Action -Force -ErrorAction Ignore }
+      }
+    if (Get-Command PSConsoleHostReadLine -ErrorAction Ignore) {
+      $resizeJob = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
+        Update-PwshProfilePoshIdleLayout
+      }
+      $resizeJob.Name = 'PwshProfile.PoshResize'
     }
   }
   else {
@@ -798,6 +901,46 @@ else {
 #
 # Azure CLI tab completion
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?view=azure-cli-latest&tabs=azure-cli&pivots=winget#enable-tab-completion-in-powershell
+
+function global:Invoke-PwshProfileCompletionProcess {
+  param(
+    [System.Diagnostics.ProcessStartInfo] $StartInfo,
+    [ValidateRange(100, 5000)] [int] $TimeoutMilliseconds = 2000
+  )
+
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $StartInfo
+  $started = $false
+  try {
+    $started = $process.Start()
+    if (-not $started) { return $false }
+
+    # Argcomplete writes candidates to its temporary file. Drain diagnostic
+    # pipes concurrently so a full pipe cannot stall the child until timeout.
+    $stdoutDrain = $process.StandardOutput.BaseStream.CopyToAsync([System.IO.Stream]::Null)
+    $stderrDrain = $process.StandardError.BaseStream.CopyToAsync([System.IO.Stream]::Null)
+    if (-not $process.WaitForExit($TimeoutMilliseconds)) { return $false }
+    return $process.ExitCode -eq 0
+  }
+  catch {
+    return $false
+  }
+  finally {
+    if ($started) {
+      try {
+        if (-not $process.HasExited) {
+          # az.cmd launches Python; stopping only cmd.exe leaves that child alive.
+          $process.Kill($true)
+          $null = $process.WaitForExit(200)
+        }
+      }
+      catch {
+        # The child may exit between HasExited and Kill.
+      }
+    }
+    $process.Dispose()
+  }
+}
 
 if ((Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore) -and
   (Get-Command -Name az -ErrorAction Ignore)) {
@@ -841,18 +984,8 @@ if ((Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore) -and
       $startInfo.EnvironmentVariables['_ARGCOMPLETE_IFS'] = "`n"
       $startInfo.EnvironmentVariables['_ARGCOMPLETE_SHELL'] = 'powershell'
 
-      $process = [System.Diagnostics.Process]::new()
-      $process.StartInfo = $startInfo
-      try {
-        $null = $process.Start()
-        # Do not block completion indefinitely on a slow/cold az process.
-        if (-not $process.WaitForExit(5000)) {
-          $process.Kill()
-        }
-      }
-      catch {
-        return
-      }
+      # Ignore partial candidates on timeout or failure.
+      if (-not (Invoke-PwshProfileCompletionProcess -StartInfo $startInfo)) { return }
 
       Get-Content -LiteralPath $completionFile.FullName -ErrorAction Ignore |
         Sort-Object -Unique |

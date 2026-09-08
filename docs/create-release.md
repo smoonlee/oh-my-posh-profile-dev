@@ -1,7 +1,17 @@
 # Create a profile release
 
-The release workflow runs when a **GitHub Release is published**. Pushing a tag
-alone does not run `.github/workflows/publish-profile-release.yml`.
+## v4 draft packaging workflow
+
+Create and push the version tag first, then create a **draft** GitHub Release
+using that existing tag. Run **Publish Pwsh Profile Release** manually with
+`release_tag` set to that tag. The workflow resolves the tag to a commit SHA,
+packages that revision, uploads assets while the release is still a draft,
+downloads and verifies the uploaded hashes, then publishes the completed release.
+Do not publish the draft manually before packaging. Published releases are refused;
+only draft assets may be replaced during a retry. A failed published release
+requires a new version, not replacement assets.
+
+Pushing a tag alone does not run `.github/workflows/publish-profile-release.yml`.
 
 ## Release order
 
@@ -10,8 +20,8 @@ alone does not run `.github/workflows/publish-profile-release.yml`.
 2. Add the matching dated section to `CHANGELOG.md`.
 3. Commit the release changes and push `main`.
 4. Create an annotated tag on that exact commit and push the tag.
-5. Publish a GitHub Release for the tag.
-6. Verify that **Publish Pwsh Profile Release** succeeds and uploads all
+5. Create a draft GitHub Release for the tag and dispatch the packaging workflow.
+6. Verify that **Publish Pwsh Profile Release** succeeds, publishes the draft, and uploads all
    twenty-one release assets.
 
 If changes go through a pull request, merge the PR first, update local `main`
@@ -40,12 +50,14 @@ git push origin main
 git tag -a v4.0.0-pre-release-0.2 -m "Release v4.0.0-pre-release-0.2"
 git push origin v4.0.0-pre-release-0.2
 
-# Publishing the prerelease triggers the asset workflow.
+# Create the draft, then explicitly dispatch packaging.
 gh release create v4.0.0-pre-release-0.2 `
   --verify-tag `
+  --draft `
   --prerelease `
    --title "v4.0.0-pre-release-0.2" `
   --notes-from-tag
+gh workflow run publish-profile-release.yml -f release_tag=v4.0.0-pre-release-0.2
 ```
 
 For a stable release, use a stable SemVer such as `4.0.0` and omit
@@ -91,10 +103,17 @@ The workflow rejects a release when:
 - any PowerShell script or module fails parsing;
 - any optional module manifest is invalid;
 - the theme is invalid JSON; or
-- an immutable release asset with the same name already exists.
+- the release is already published, the tag moves, or uploaded asset verification fails.
 
 ## Important safeguards
 
+- The `Validate Pwsh Profile` workflow runs the Windows regression suite on PRs,
+  `main`, and merge queues. Configure `Windows regression` as a required status
+  check in the GitHub ruleset protecting `main`; workflow files alone do not
+  enforce merge protection. Require the branch to be up to date or use a merge queue.
+- CI tests PowerShell 7 plus targeted Windows PowerShell 5.1 fallbacks. It does
+  not claim full feature parity on 5.1. OMP is pinned to 31.2.0 for reproducibility;
+  update the pin deliberately and rerun the prompt and initialization tests.
 - Do not move or reuse a published tag.
 - Do not delete and recreate a release to replace assets; increment the version.
 - Confirm the workflow succeeded before announcing or installing the release.

@@ -13,7 +13,7 @@ function Install-PwshProfileAtomicFile {
   & $script:AtomicImpl -StagedPath $StagedPath -Destination $Destination -BackupPath $BackupPath
 }
 function Write-PwshProfileStatus { }
-$updater = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-PwshProfileModuleUpdate' }, $true).Extent.Text
+$updater = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-PwshProfileModuleUpdateCore' }, $true).Extent.Text
 $start = $updater.IndexOf('  $wasLoaded =')
 $end = $updater.IndexOf("  Write-PwshProfileStatus -Stage 'Complete'", $start)
 $transaction = [scriptblock]::Create($updater.Substring($start, $end - $start))

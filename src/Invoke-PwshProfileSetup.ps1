@@ -1,85 +1,85 @@
 [CmdletBinding()]
 param (
   # This region is refreshed by scripts/Update-NerdFontsCatalog.ps1.
-	# BEGIN GENERATED NERD FONT VALIDATESET
-	[ValidateSet(
-		'0xProto',
-		'3270',
-		'AdwaitaMono',
-		'Agave',
-		'AnnotationM',
-		'AnonymicePro',
-		'Arimo',
-		'AtkynsonMono',
-		'AurulentSansM',
-		'BigBlueTerm',
-		'BitstromWera',
-		'BlexMono',
-		'CaskaydiaCove',
-		'CaskaydiaMono',
-		'CodeNewRoman',
-		'ComicShannsMono',
-		'CommitMono',
-		'Cousine',
-		'D2KodingLigature',
-		'DaddyTimeMono',
-		'DejaVuSansM',
-		'DepartureMono',
-		'DroidSansM',
-		'EnvyCodeR',
-		'FantasqueSansM',
-		'FiraCode',
-		'FiraMono',
-		'GeistMono',
-		'GohuFont',
-		'GoMono',
-		'GoogleSansCode',
-		'Hack',
-		'Hasklug',
-		'HeavyData',
-		'Hurmit',
-		'iMWriting',
-		'Inconsolata',
-		'Inconsolata LGC',
-		'InconsolataGo',
-		'IntoneMono',
-		'Iosevka',
-		'IosevkaTerm',
-		'IosevkaTermSlab',
-		'JetBrainsMono',
-		'Lekton',
-		'Lilex',
-		'LiterationMono',
-		'M+',
-		'MartianMono',
-		'MesloLG',
-		'Monaspice',
-		'Monofur',
-		'Monoid',
-		'Mononoki',
-		'Noto',
-		'OpenDyslexic',
-		'Overpass',
-		'ProFont',
-		'ProggyClean',
-		'RecMono',
-		'RobotoMono',
-		'SauceCodePro',
-		'ShureTechMono',
-		'SpaceMono',
-		'Symbols',
-		'Terminess',
-		'Tinos',
-		'Ubuntu',
-		'UbuntuMono',
-		'UbuntuSans',
-		'VictorMono',
-		'ZedMono'
-	)]
-	[Parameter(Position = 0)]
-	[Alias('NerdFont')]
-	[string] $nerdFontName = ''
-	# END GENERATED NERD FONT VALIDATESET
+  # BEGIN GENERATED NERD FONT VALIDATESET
+  [ValidateSet(
+    '0xProto',
+    '3270',
+    'AdwaitaMono',
+    'Agave',
+    'AnnotationM',
+    'AnonymicePro',
+    'Arimo',
+    'AtkynsonMono',
+    'AurulentSansM',
+    'BigBlueTerm',
+    'BitstromWera',
+    'BlexMono',
+    'CaskaydiaCove',
+    'CaskaydiaMono',
+    'CodeNewRoman',
+    'ComicShannsMono',
+    'CommitMono',
+    'Cousine',
+    'D2KodingLigature',
+    'DaddyTimeMono',
+    'DejaVuSansM',
+    'DepartureMono',
+    'DroidSansM',
+    'EnvyCodeR',
+    'FantasqueSansM',
+    'FiraCode',
+    'FiraMono',
+    'GeistMono',
+    'GohuFont',
+    'GoMono',
+    'GoogleSansCode',
+    'Hack',
+    'Hasklug',
+    'HeavyData',
+    'Hurmit',
+    'iMWriting',
+    'Inconsolata',
+    'Inconsolata LGC',
+    'InconsolataGo',
+    'IntoneMono',
+    'Iosevka',
+    'IosevkaTerm',
+    'IosevkaTermSlab',
+    'JetBrainsMono',
+    'Lekton',
+    'Lilex',
+    'LiterationMono',
+    'M+',
+    'MartianMono',
+    'MesloLG',
+    'Monaspice',
+    'Monofur',
+    'Monoid',
+    'Mononoki',
+    'Noto',
+    'OpenDyslexic',
+    'Overpass',
+    'ProFont',
+    'ProggyClean',
+    'RecMono',
+    'RobotoMono',
+    'SauceCodePro',
+    'ShureTechMono',
+    'SpaceMono',
+    'Symbols',
+    'Terminess',
+    'Tinos',
+    'Ubuntu',
+    'UbuntuMono',
+    'UbuntuSans',
+    'VictorMono',
+    'ZedMono'
+  )]
+  [Parameter(Position = 0)]
+  [Alias('NerdFont')]
+  [string] $nerdFontName = ''
+  # END GENERATED NERD FONT VALIDATESET
 
   ,
   [ValidateSet('All', 'NerdFont', 'Winget', 'Modules', 'Profile', 'ProfileUpdate')]
@@ -92,6 +92,7 @@ param (
   [switch] $LocalSource
 )
 
+# ! HELP Write-PwshProfileStatus - Writes the status of the current profile setup stage
 function Write-PwshProfileStatus {
   [CmdletBinding()]
   param (
@@ -178,13 +179,13 @@ function Get-WindowsSudoConsoleMode {
   if ($configuration -match '(?i)inline|input\s+closed|disableInput|normal') {
     return [pscustomobject]@{
       Command = $sudo.Source
-      Mode = 'CurrentConsole'
+      Mode    = 'CurrentConsole'
     }
   }
 
   [pscustomobject]@{
     Command = $sudo.Source
-    Mode = 'NewWindow'
+    Mode    = 'NewWindow'
   }
 }
 
@@ -280,8 +281,7 @@ function Get-NerdFontsCatalog {
     } catch {
       throw "Unable to load the local Nerd Fonts catalog from '$LocalPath'. $($_.Exception.Message)"
     }
-  }
-  else {
+  } else {
     Write-PwshProfileStatus -Stage 'Catalog' -Message 'Loading the latest Nerd Fonts metadata...'
     Write-Verbose "Catalog source: $RemoteUri"
 
@@ -326,8 +326,8 @@ function Resolve-NerdFont {
   )
 
   $font = $Catalog.Fonts |
-    Where-Object FriendlyName -EQ $Name |
-    Select-Object -First 1
+  Where-Object FriendlyName -EQ $Name |
+  Select-Object -First 1
 
   if (-not $font) {
     throw "Nerd Font '$Name' was not found in the generated catalog."
@@ -420,9 +420,9 @@ function Find-InstalledNerdFont {
   }
 
   Get-ChildItem -LiteralPath $existingFontDirectories -File -ErrorAction Stop |
-    Where-Object Extension -In @('.ttf', '.otf', '.ttc') |
-    Select-NerdFontMatchingFile -Font $Font |
-    Sort-Object FullName -Unique
+  Where-Object Extension -In @('.ttf', '.otf', '.ttc') |
+  Select-NerdFontMatchingFile -Font $Font |
+  Sort-Object FullName -Unique
 }
 
 function ConvertTo-NerdFontsReleaseVersion {
@@ -457,21 +457,21 @@ function Get-NerdFontInstallDecision {
 
   if (-not $IsInstalled) {
     return [pscustomobject]@{
-      RequiresInstall = $true
-      InstalledVersion = $null
+      RequiresInstall    = $true
+      InstalledVersion   = $null
       IsNewerThanCatalog = $false
-      IsUntracked = $false
-      Reason = 'not installed'
+      IsUntracked        = $false
+      Reason             = 'not installed'
     }
   }
 
   if (-not $InstallState -or -not $InstallState.NerdFontsVersion) {
     return [pscustomobject]@{
-      RequiresInstall = $false
-      InstalledVersion = $null
+      RequiresInstall    = $false
+      InstalledVersion   = $null
       IsNewerThanCatalog = $false
-      IsUntracked = $true
-      Reason = 'installed release is unknown'
+      IsUntracked        = $true
+      Reason             = 'installed release is unknown'
     }
   }
 
@@ -482,11 +482,11 @@ function Get-NerdFontInstallDecision {
 
   if ($installedRelease -gt $latestRelease) {
     return [pscustomobject]@{
-      RequiresInstall = $false
-      InstalledVersion = $installedVersion
+      RequiresInstall    = $false
+      InstalledVersion   = $installedVersion
       IsNewerThanCatalog = $true
-      IsUntracked = $false
-      Reason = 'installed release is newer than the catalog'
+      IsUntracked        = $false
+      Reason             = 'installed release is newer than the catalog'
     }
   }
 
@@ -498,20 +498,20 @@ function Get-NerdFontInstallDecision {
     }
 
     return [pscustomobject]@{
-      RequiresInstall = $true
-      InstalledVersion = $installedVersion
+      RequiresInstall    = $true
+      InstalledVersion   = $installedVersion
       IsNewerThanCatalog = $false
-      IsUntracked = $false
-      Reason = $reason
+      IsUntracked        = $false
+      Reason             = $reason
     }
   }
 
   [pscustomobject]@{
-    RequiresInstall = $false
-    InstalledVersion = $installedVersion
+    RequiresInstall    = $false
+    InstalledVersion   = $installedVersion
     IsNewerThanCatalog = $false
-    IsUntracked = $false
-    Reason = 'current'
+    IsUntracked        = $false
+    Reason             = 'current'
   }
 }
 
@@ -566,8 +566,8 @@ function Set-NerdFontInstallState {
 
   $state = [ordered]@{
     NerdFontsVersion = $NerdFontsVersion
-    FontVersion = [string]$Font.FontVersion
-    InstalledAt = [DateTimeOffset]::UtcNow.ToString('o')
+    FontVersion      = [string]$Font.FontVersion
+    InstalledAt      = [DateTimeOffset]::UtcNow.ToString('o')
   } | ConvertTo-Json -Compress
 
   New-ItemProperty -LiteralPath $RegistryPath -Name ([string]$Font.ArchiveName) -Value $state -PropertyType String -Force | Out-Null
@@ -585,8 +585,8 @@ function Select-NerdFontInstallFiles {
 
   $patchedFiles = @(
     Get-ChildItem -LiteralPath $ExtractPath -Recurse -File |
-      Where-Object Extension -In @('.ttf', '.otf', '.ttc') |
-      Select-NerdFontMatchingFile -Font $Font
+    Where-Object Extension -In @('.ttf', '.otf', '.ttc') |
+    Select-NerdFontMatchingFile -Font $Font
   )
 
   $regularFiles = @($patchedFiles | Where-Object { $_.BaseName -match '(?i)regular' })
@@ -629,7 +629,7 @@ function Remove-NerdFontRegistration {
       $properties | Where-Object {
         $_.Name -notmatch '^PS' -and
         ([System.IO.Path]::GetFileName([string]$_.Value) -eq $fontFile.Name -or
-          [string]$_.Value -eq $fontFile.FullName)
+        [string]$_.Value -eq $fontFile.FullName)
       } | ForEach-Object {
         Remove-ItemProperty -LiteralPath $registryPath -Name $_.Name -ErrorAction SilentlyContinue
       }
@@ -682,8 +682,8 @@ function Get-NerdFontFaceName {
     try {
       $fontCollection.AddFontFile($FontFile.FullName)
       $familyName = @($fontCollection.Families | Select-Object -ExpandProperty Name) |
-        Where-Object { $_ -match '(?i)\b(NF|Nerd Font)\b' } |
-        Select-Object -First 1
+      Where-Object { $_ -match '(?i)\b(NF|Nerd Font)\b' } |
+      Select-Object -First 1
 
       if (-not $familyName) {
         $familyName = $fontCollection.Families | Select-Object -ExpandProperty Name -First 1
@@ -778,27 +778,27 @@ function Get-WindowsTerminalColorScheme {
   param ()
 
   [pscustomobject][ordered]@{
-    name = 'Solarized Dark (modified)'
-    background = '#002B36'
-    foreground = '#BDBCBF'
-    cursorColor = '#FFFFFF'
+    name                = 'Solarized Dark (modified)'
+    background          = '#002B36'
+    foreground          = '#BDBCBF'
+    cursorColor         = '#FFFFFF'
     selectionBackground = '#FFFFFF'
-    black = '#0B5366'
-    red = '#DC322F'
-    green = '#859900'
-    yellow = '#B58900'
-    blue = '#268BD2'
-    purple = '#D33682'
-    cyan = '#2AA198'
-    white = '#EEE8D5'
-    brightBlack = '#107D99'
-    brightRed = '#CB4B16'
-    brightGreen = '#98C379'
-    brightYellow = '#A6A438'
-    brightBlue = '#839496'
-    brightPurple = '#B4009E'
-    brightCyan = '#D6D6D6'
-    brightWhite = '#FDF6E3'
+    black               = '#0B5366'
+    red                 = '#DC322F'
+    green               = '#859900'
+    yellow              = '#B58900'
+    blue                = '#268BD2'
+    purple              = '#D33682'
+    cyan                = '#2AA198'
+    white               = '#EEE8D5'
+    brightBlack         = '#107D99'
+    brightRed           = '#CB4B16'
+    brightGreen         = '#98C379'
+    brightYellow        = '#A6A438'
+    brightBlue          = '#839496'
+    brightPurple        = '#B4009E'
+    brightCyan          = '#D6D6D6'
+    brightWhite         = '#FDF6E3'
   }
 }
 
@@ -814,8 +814,8 @@ function Set-WindowsTerminalColorScheme {
 
   $schemes = @($Settings.schemes)
   $existingScheme = $schemes |
-    Where-Object { $_.name -eq $ColorScheme.name } |
-    Select-Object -First 1
+  Where-Object { $_.name -eq $ColorScheme.name } |
+  Select-Object -First 1
 
   if (-not $existingScheme) {
     Set-ObjectPropertyValue -InputObject $Settings -Name 'schemes' -Value @($schemes + $ColorScheme)
@@ -843,23 +843,23 @@ function Set-WindowsTerminalProfileOrder {
 
   $profileDefinitions = @(
     [pscustomobject]@{
-      Role = 'Pwsh7'
-      Name = 'Pwsh 7'
+      Role          = 'Pwsh7'
+      Name          = 'Pwsh 7'
       PreferredGuid = '574e775e-4f2a-5b96-ac1e-a2962a402336'
     }
     [pscustomobject]@{
-      Role = 'Pwsh5'
-      Name = 'Pwsh 5'
+      Role          = 'Pwsh5'
+      Name          = 'Pwsh 5'
       PreferredGuid = '61c54bbd-c2c6-5271-96e7-009a87ff44bf'
     }
     [pscustomobject]@{
-      Role = 'CommandPrompt'
-      Name = 'Command Prompt'
+      Role          = 'CommandPrompt'
+      Name          = 'Command Prompt'
       PreferredGuid = '0caa0dad-35be-5f56-a8ff-afceeeaa6101'
     }
     [pscustomobject]@{
-      Role = 'AzureCloudShell'
-      Name = 'Azure Cloud Shell'
+      Role          = 'AzureCloudShell'
+      Name          = 'Azure Cloud Shell'
       PreferredGuid = 'b453ae62-4e3d-5e58-b989-0a998ec441b8'
     }
   )
@@ -936,9 +936,9 @@ function Set-WindowsTerminalProfileOrder {
   }
 
   [pscustomobject]@{
-    Profiles = $orderedProfiles.ToArray()
-    Changed = $changed
-    RemovedCount = $removedCount
+    Profiles         = $orderedProfiles.ToArray()
+    Changed          = $changed
+    RemovedCount     = $removedCount
     GuidReplacements = $guidReplacements
   }
 }
@@ -1407,25 +1407,27 @@ function Get-WingetPackageVersionInfo {
     [string] $PackageId,
 
     [Parameter(Mandatory)]
-    [string] $WingetPath,
-
-    [Parameter(Mandatory)]
-    [ValidateSet('list', 'upgrade')]
-    [string] $Command
+    [string] $WingetPath
   )
 
   try {
-    $output = & $WingetPath $Command --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $output) {
-      return $null
-    }
+    # `winget upgrade --id ...` performs the upgrade; it is not a read-only query.
+    # `winget list` includes an Available column when an upgrade exists.
+    $output = & $WingetPath list --id $PackageId --exact --source winget --accept-source-agreements --disable-interactivity 2>$null
+    # Only WinGet's documented no-applications HRESULT means absent.
+    if ($LASTEXITCODE -eq -1978335212) { return $null }
+    if ($LASTEXITCODE -ne 0) { throw "Winget query failed with exit code $LASTEXITCODE." }
 
     # Winget emits ANSI colour codes even when output is redirected; strip them before column parsing.
     $ansiEscapePattern = '{0}\[[0-9;]*[a-zA-Z]' -f [char]27
     $plainLines = $output | ForEach-Object { $_ -replace $ansiEscapePattern, '' }
-    ConvertFrom-WingetTableRow -Lines $plainLines -PackageId $PackageId
+    $info = ConvertFrom-WingetTableRow -Lines $plainLines -PackageId $PackageId
+    if (-not $info -or $info.Id -ne $PackageId -or -not $info.Version) {
+      throw 'Winget output could not be interpreted; package state is unknown (possibly localized output).'
+    }
+    $info
   } catch {
-    $null
+    throw "Could not query '$PackageId': $($_.Exception.Message)"
   }
 }
 
@@ -1518,19 +1520,19 @@ function Show-WingetPackageInventory {
   )
 
   $Packages |
-    Format-Table -Property `
-    @{ Label = 'Package ID'; Expression = { $_.Id } },
+  Format-Table -Property `
+  @{ Label = 'Package ID'; Expression = { $_.Id } },
   @{ Label = 'Scope'; Expression = { Get-WingetScopeDisplayName -Scope $_.Scope } } `
     -AutoSize |
-    Out-String -Width 160 |
-    ForEach-Object {
+  Out-String -Width 160 |
+  ForEach-Object {
     $_ -split '\r?\n'
   } |
-    ForEach-Object {
+  ForEach-Object {
     $_.TrimEnd()
   } |
-    Where-Object { $_ } |
-    ForEach-Object {
+  Where-Object { $_ } |
+  ForEach-Object {
     Write-PwshProfileStatus -Stage 'Winget' -Message $_
   }
   Write-Host ''
@@ -1553,9 +1555,15 @@ function Invoke-WingetConfiguration {
 
   $packageStates = @(
     foreach ($package in $packages) {
+      Write-PwshProfileStatus -Stage 'Check' -Message $package.Id
+      $queryError = $null
+      $installedInfo = $null
+      try { $installedInfo = Get-WingetPackageVersionInfo -PackageId $package.Id -WingetPath $wingetPath }
+      catch { $queryError = $_.Exception.Message }
       [pscustomobject]@{
-        Package = $package
-        InstalledInfo = Get-WingetPackageVersionInfo -PackageId $package.Id -WingetPath $wingetPath -Command list
+        Package       = $package
+        InstalledInfo = $installedInfo
+        QueryError    = $queryError
       }
     }
   )
@@ -1563,18 +1571,17 @@ function Invoke-WingetConfiguration {
   $summary = [ordered]@{
     Updated = 0
     Current = 0
-    Failed = 0
+    Failed  = 0
   }
 
   foreach ($state in $packageStates) {
     $displayScope = Get-WingetScopeDisplayName -Scope $state.Package.Scope
     try {
+      if ($state.QueryError) { throw $state.QueryError }
       if ($state.InstalledInfo) {
         $installedVersion = if ($state.InstalledInfo.Version) { $state.InstalledInfo.Version } else { 'unknown version' }
-        $upgradeInfo = Get-WingetPackageVersionInfo -PackageId $state.Package.Id -WingetPath $wingetPath -Command upgrade
-
-        if ($upgradeInfo) {
-          $latestVersion = if ($upgradeInfo -and $upgradeInfo.Available) { $upgradeInfo.Available } else { 'a newer version' }
+        if ($state.InstalledInfo.Available) {
+          $latestVersion = $state.InstalledInfo.Available
           Write-PwshProfileStatus -Stage 'Winget' -Type Action -Message "$($state.Package.Id) installed $installedVersion, updating to $latestVersion [$displayScope]"
           Invoke-WingetPackageAction -Package $state.Package -WingetPath $wingetPath -Action upgrade
           $summary.Updated++
@@ -1626,8 +1633,8 @@ function Initialize-PowerShellGallery {
 
   Write-PwshProfileStatus -Stage 'Modules' -Message 'Checking NuGet package provider...'
   $nugetProvider = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue |
-    Sort-Object Version -Descending |
-    Select-Object -First 1
+  Sort-Object Version -Descending |
+  Select-Object -First 1
 
   if (-not $nugetProvider -or $nugetProvider.Version -lt [version]'2.8.5.201') {
     Write-PwshProfileStatus -Stage 'Modules' -Type Action -Message 'Installing NuGet package provider 2.8.5.201...'
@@ -1707,17 +1714,17 @@ function Get-InstalledPowerShellModules {
   }
 
   Get-ChildItem -LiteralPath $moduleRoot -Directory -ErrorAction SilentlyContinue |
-    ForEach-Object {
+  ForEach-Object {
     $version = $null
     if ([version]::TryParse($_.Name, [ref] $version)) {
       [pscustomobject]@{
-        Name = $Name
-        Version = $version
+        Name       = $Name
+        Version    = $version
         ModuleBase = $_.FullName
       }
     }
   } |
-    Sort-Object Version -Descending
+  Sort-Object Version -Descending
 }
 
 function Remove-OldPowerShellModuleVersions {
@@ -1807,9 +1814,9 @@ function Invoke-PowerShellModuleAction {
       Get-PowerShellModuleInstallState -RegistryPath $StateRegistryPath -Name $Module.Name
     }
     $installedVersion = @($diskModule.Version, $trackedVersion) |
-      Where-Object { $_ } |
-      Sort-Object -Descending |
-      Select-Object -First 1
+    Where-Object { $_ } |
+    Sort-Object -Descending |
+    Select-Object -First 1
 
     $galleryVersion = Invoke-WithRetry -Description "Find-Module $($Module.Name)" -ScriptBlock {
       (Find-Module -Name $Module.Name -Repository PSGallery -ErrorAction Stop).Version
@@ -1867,15 +1874,15 @@ function Show-PowerShellModuleInventory {
 
   Write-Host ''
   $Modules |
-    Format-Table -Property `
-    @{ Label = 'Module'; Expression = { $_.Name } },
+  Format-Table -Property `
+  @{ Label = 'Module'; Expression = { $_.Name } },
   @{ Label = 'Scope'; Expression = { $_.Scope } } `
     -AutoSize |
-    Out-String -Width 120 |
-    ForEach-Object { $_ -split '\r?\n' } |
-    ForEach-Object { $_.TrimEnd() } |
-    Where-Object { $_ } |
-    ForEach-Object { Write-PwshProfileStatus -Stage 'Modules' -Message $_ }
+  Out-String -Width 120 |
+  ForEach-Object { $_ -split '\r?\n' } |
+  ForEach-Object { $_.TrimEnd() } |
+  Where-Object { $_ } |
+  ForEach-Object { Write-PwshProfileStatus -Stage 'Modules' -Message $_ }
   Write-Host ''
 }
 
@@ -1898,7 +1905,7 @@ function Compare-PwshProfileSemanticVersion {
     }
 
     [pscustomobject]@{
-      Core = [version]$Matches.core
+      Core       = [version]$Matches.core
       Prerelease = if ($Matches.prerelease) { @($Matches.prerelease -split '\.') } else { @() }
     }
   }
@@ -1927,14 +1934,11 @@ function Compare-PwshProfileSemanticVersion {
       $identifierComparison = [System.Numerics.BigInteger]::Parse($leftIdentifier).CompareTo(
         [System.Numerics.BigInteger]::Parse($rightIdentifier)
       )
-    }
-    elseif ($leftIsNumeric) {
+    } elseif ($leftIsNumeric) {
       $identifierComparison = -1
-    }
-    elseif ($rightIsNumeric) {
+    } elseif ($rightIsNumeric) {
       $identifierComparison = 1
-    }
-    else {
+    } else {
       $identifierComparison = [string]::CompareOrdinal($leftIdentifier, $rightIdentifier)
     }
     if ($identifierComparison -ne 0) {
@@ -1943,6 +1947,16 @@ function Compare-PwshProfileSemanticVersion {
   }
 
   0
+}
+
+function Get-PwshProfileReleasePages {
+  [CmdletBinding()]
+  param([string] $Uri, [hashtable] $Headers, [int] $TimeoutSec = 15)
+  for ($page = 1; ; $page++) {
+    $items = @(Invoke-RestMethod -Uri "$Uri&page=$page" -Headers $Headers -TimeoutSec $TimeoutSec -ErrorAction Stop)
+    $items
+    if ($items.Count -lt 100) { break }
+  }
 }
 
 function Get-PwshProfileGitHubRelease {
@@ -1954,11 +1968,11 @@ function Get-PwshProfileGitHubRelease {
   )
 
   try {
-    $releases = @(Invoke-RestMethod `
-      -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
-      -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
-      -TimeoutSec 15 `
-      -ErrorAction Stop)
+    $releases = @(Get-PwshProfileReleasePages `
+        -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
+        -Headers @{ 'User-Agent' = 'pwsh-profile-updater' } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop)
   } catch {
     if ([int]$_.Exception.Response.StatusCode -eq 404) {
       return $null
@@ -2028,11 +2042,11 @@ function Get-PwshProfileLocalStorePaths {
 
   $root = Join-Path $env:APPDATA 'PwshProfile'
   [pscustomobject]@{
-    Root = $root
-    Themes = Join-Path $root 'themes'
-    Functions = Join-Path $root 'functions'
-    Modules = Join-Path $root 'modules'
-    Config = Join-Path $root 'config'
+    Root        = $root
+    Themes      = Join-Path $root 'themes'
+    Functions   = Join-Path $root 'functions'
+    Modules     = Join-Path $root 'modules'
+    Config      = Join-Path $root 'config'
     VersionFile = Join-Path $root 'version.json'
   }
 }
@@ -2081,7 +2095,7 @@ function Get-PwshProfileNerdFontsCatalogSource {
       throw "Local Nerd Fonts catalog not found: $catalogPath"
     }
     return [pscustomobject]@{
-      LocalPath = $catalogPath
+      LocalPath  = $catalogPath
       ReleaseTag = 'local'
     }
   }
@@ -2134,8 +2148,8 @@ function Get-PwshProfileNerdFontsCatalogSource {
   }
 
   [pscustomobject]@{
-    Uri = [uri]$releaseAssets['NerdFontsCatalog.json']
-    Sha256 = [string]$catalog.sha256
+    Uri        = [uri]$releaseAssets['NerdFontsCatalog.json']
+    Sha256     = [string]$catalog.sha256
     ReleaseTag = [string]$release.tag_name
   }
 }
@@ -2176,6 +2190,18 @@ function Install-PwshProfileAtomicFile {
     [string] $BackupPath
   )
 
+  if ($script:PwshProfileJournalPath) {
+    # Persist a recovery copy before touching the destination, including on a
+    # filesystem where the subsequent replacement never completes.
+    $existed = Test-Path -LiteralPath $Destination -PathType Leaf
+    $recoveryPath = "$BackupPath.recovery"
+    if ($existed) { Copy-Item -LiteralPath $Destination -Destination $recoveryPath -ErrorAction Stop }
+    $script:PwshProfileJournal.Add([pscustomobject]@{ destination = $Destination; existed = $existed; backup = $recoveryPath })
+    $journalTemporary = "$($script:PwshProfileJournalPath).tmp"
+    [IO.File]::WriteAllText($journalTemporary, (ConvertTo-Json -InputObject @($script:PwshProfileJournal.ToArray()) -Depth 5), [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $script:PwshProfileJournalPath) { [IO.File]::Replace($journalTemporary, $script:PwshProfileJournalPath, "$($script:PwshProfileJournalPath).previous") }
+    else { [IO.File]::Move($journalTemporary, $script:PwshProfileJournalPath) }
+  }
   if (Test-Path -LiteralPath $Destination -PathType Leaf) {
     [System.IO.File]::Replace(
       [System.IO.Path]::GetFullPath($StagedPath),
@@ -2206,25 +2232,25 @@ function Install-PwshProfileLocalSource {
 
   $sourceRootPath = [System.IO.Path]::GetFullPath($SourceRoot)
   $sourcePaths = [ordered]@{
-    profile = Join-Path $sourceRootPath 'profile\Microsoft.PowerShell_profile.ps1'
-    theme = Join-Path $sourceRootPath 'themes\quick-term-cloud.omp.json'
-    setup = Join-Path $sourceRootPath 'Invoke-PwshProfileSetup.ps1'
-    publicIPManifest = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
-    publicIPScript = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
-    networkCidrManifest = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
-    networkCidrScript = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
-    networkCidrFormat = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
-    endOfLifeManifest = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
-    endOfLifeScript = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
-    endOfLifeFormat = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
+    profile                 = Join-Path $sourceRootPath 'profile\Microsoft.PowerShell_profile.ps1'
+    theme                   = Join-Path $sourceRootPath 'themes\quick-term-cloud.omp.json'
+    setup                   = Join-Path $sourceRootPath 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest        = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+    publicIPScript          = Join-Path $sourceRootPath 'modules\PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
+    networkCidrManifest     = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
+    networkCidrScript       = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat       = Join-Path $sourceRootPath 'modules\PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
+    endOfLifeManifest       = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
+    endOfLifeScript         = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat         = Join-Path $sourceRootPath 'modules\PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
-    azureKubernetesScript = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
-    dnsManifest = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psd1'
-    dnsScript = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psm1'
-    dnsFormat = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
-    tlsCertificateManifest = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
-    tlsCertificateScript = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
-    tlsCertificateFormat = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
+    azureKubernetesScript   = Join-Path $sourceRootPath 'modules\PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
+    dnsManifest             = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psd1'
+    dnsScript               = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.psm1'
+    dnsFormat               = Join-Path $sourceRootPath 'modules\PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest  = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript    = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat    = Join-Path $sourceRootPath 'modules\PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   }
   foreach ($name in $sourcePaths.Keys) {
     if (-not (Test-Path -LiteralPath $sourcePaths[$name] -PathType Leaf)) {
@@ -2240,25 +2266,25 @@ function Install-PwshProfileLocalSource {
     }
   }
   $destinations = [ordered]@{
-    profile = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
-    theme = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
-    setup = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
-    publicIPManifest = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
-    publicIPScript = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
-    networkCidrManifest = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
-    networkCidrScript = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
-    networkCidrFormat = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
-    endOfLifeManifest = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
-    endOfLifeScript = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
-    endOfLifeFormat = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
+    profile                 = Join-Path (Get-CrossPlatformSupportPaths).SourceRoot 'Microsoft.PowerShell_profile.ps1'
+    theme                   = Join-Path $paths.Themes 'quick-term-cloud.omp.json'
+    setup                   = Join-Path $paths.Functions 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest        = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psd1'
+    publicIPScript          = Join-Path $paths.Modules 'PwshProfile.PublicIP\PwshProfile.PublicIP.psm1'
+    networkCidrManifest     = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psd1'
+    networkCidrScript       = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat       = Join-Path $paths.Modules 'PwshProfile.NetworkCidr\PwshProfile.NetworkCidr.Format.ps1xml'
+    endOfLifeManifest       = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psd1'
+    endOfLifeScript         = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat         = Join-Path $paths.Modules 'PwshProfile.EndOfLife\PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psd1'
-    azureKubernetesScript = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
-    dnsManifest = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psd1'
-    dnsScript = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psm1'
-    dnsFormat = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
-    tlsCertificateManifest = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
-    tlsCertificateScript = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
-    tlsCertificateFormat = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
+    azureKubernetesScript   = Join-Path $paths.Modules 'PwshProfile.AzureKubernetes\PwshProfile.AzureKubernetes.psm1'
+    dnsManifest             = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psd1'
+    dnsScript               = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.psm1'
+    dnsFormat               = Join-Path $paths.Modules 'PwshProfile.Dns\PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest  = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript    = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat    = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   }
 
   Write-PwshProfileStatus -Stage $operation -Type Warning -Message 'Development mode: release metadata and remote asset verification are intentionally bypassed.'
@@ -2285,38 +2311,37 @@ function Install-PwshProfileLocalSource {
     $null = Import-PowerShellDataFile -LiteralPath $sourcePaths.tlsCertificateManifest -ErrorAction Stop
     $null = [xml](Get-Content -LiteralPath $sourcePaths.tlsCertificateFormat -Raw -ErrorAction Stop)
     $null = Get-Content -LiteralPath $sourcePaths.theme -Raw -ErrorAction Stop |
-      ConvertFrom-Json -ErrorAction Stop
+    ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $sourcePaths.profile -Raw -ErrorAction Stop
     if ($profileContent -notmatch "(?m)^\s*\`$script:PwshProfileVersion\s*=\s*'(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)'\s*$") {
       throw 'The local profile does not declare a valid SemVer 2.0 version.'
     }
     $localVersion = $Matches.version
-  }
-  catch {
+  } catch {
     Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local source validation failed; no installed files were changed. $($_.Exception.Message)"
     return $false
   }
 
   $artifactNames = [ordered]@{
-    profile = 'Microsoft.PowerShell_profile.ps1'
-    theme = 'quick-term-cloud.omp.json'
-    setup = 'Invoke-PwshProfileSetup.ps1'
-    publicIPManifest = 'PwshProfile.PublicIP.psd1'
-    publicIPScript = 'PwshProfile.PublicIP.psm1'
-    networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
-    networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
-    networkCidrFormat = 'PwshProfile.NetworkCidr.Format.ps1xml'
-    endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
-    endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
-    endOfLifeFormat = 'PwshProfile.EndOfLife.Format.ps1xml'
+    profile                 = 'Microsoft.PowerShell_profile.ps1'
+    theme                   = 'quick-term-cloud.omp.json'
+    setup                   = 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest        = 'PwshProfile.PublicIP.psd1'
+    publicIPScript          = 'PwshProfile.PublicIP.psm1'
+    networkCidrManifest     = 'PwshProfile.NetworkCidr.psd1'
+    networkCidrScript       = 'PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat       = 'PwshProfile.NetworkCidr.Format.ps1xml'
+    endOfLifeManifest       = 'PwshProfile.EndOfLife.psd1'
+    endOfLifeScript         = 'PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat         = 'PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
-    azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
-    dnsManifest = 'PwshProfile.Dns.psd1'
-    dnsScript = 'PwshProfile.Dns.psm1'
-    dnsFormat = 'PwshProfile.Dns.Format.ps1xml'
-    tlsCertificateManifest = 'PwshProfile.TlsCertificate.psd1'
-    tlsCertificateScript = 'PwshProfile.TlsCertificate.psm1'
-    tlsCertificateFormat = 'PwshProfile.TlsCertificate.Format.ps1xml'
+    azureKubernetesScript   = 'PwshProfile.AzureKubernetes.psm1'
+    dnsManifest             = 'PwshProfile.Dns.psd1'
+    dnsScript               = 'PwshProfile.Dns.psm1'
+    dnsFormat               = 'PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest  = 'PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript    = 'PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat    = 'PwshProfile.TlsCertificate.Format.ps1xml'
   }
   $artifactHashes = [ordered]@{}
   foreach ($name in $artifactNames.Keys) {
@@ -2368,16 +2393,16 @@ function Install-PwshProfileLocalSource {
 
     $installedManifest = [ordered]@{
       schemaVersion = 2
-      version = $localVersion
-      tag = $null
-      channel = 'local'
-      repository = 'smoonlee/oh-my-posh-profile-dev'
-      installedAt = [DateTimeOffset]::UtcNow.ToString('o')
-      artifacts = [ordered]@{}
+      version       = $localVersion
+      tag           = $null
+      channel       = 'local'
+      repository    = 'smoonlee/oh-my-posh-profile-dev'
+      installedAt   = [DateTimeOffset]::UtcNow.ToString('o')
+      artifacts     = [ordered]@{}
     }
     foreach ($name in $artifactNames.Keys) {
       $installedManifest.artifacts[$name] = [ordered]@{
-        file = $artifactNames[$name]
+        file   = $artifactNames[$name]
         sha256 = $artifactHashes[$name]
       }
     }
@@ -2387,31 +2412,23 @@ function Install-PwshProfileLocalSource {
       "$versionJson`n",
       [System.Text.UTF8Encoding]::new($false)
     )
-    if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
-      [System.IO.File]::Replace(
-        [System.IO.Path]::GetFullPath($versionTemporaryPath),
-        [System.IO.Path]::GetFullPath($paths.VersionFile),
-        [System.IO.Path]::GetFullPath("$($paths.VersionFile).$backupTimestamp.bak"),
-        $true
-      )
-    }
-    else {
-      [System.IO.File]::Move($versionTemporaryPath, $paths.VersionFile)
-    }
-  }
-  catch {
+    Install-PwshProfileAtomicFile -StagedPath $versionTemporaryPath -Destination $paths.VersionFile -BackupPath "$($paths.VersionFile).$backupTimestamp.bak"
+  } catch {
+    $installFailure = $_
+    $rollbackErrors = @()
     foreach ($name in @($replaced)) {
-      if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
-        Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction SilentlyContinue
-      }
-      elseif (-not $destinationExisted[$name]) {
-        Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction SilentlyContinue
-      }
+      try {
+        if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
+          Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction Stop
+        } elseif (-not $destinationExisted[$name]) {
+          Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction Stop
+        } else { throw "Backup missing for $($destinations[$name])" }
+      } catch { $rollbackErrors += "$($destinations[$name]): $($_.Exception.Message)" }
     }
-    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local installation failed and previous files were restored. $($_.Exception.Message)"
+    $recovery = if ($rollbackErrors.Count) { "Rollback incomplete: $($rollbackErrors -join '; '). Retained backups: $($backups.Values -join ', ')" } else { 'Previous files were restored.' }
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Local installation failed. $($installFailure.Exception.Message) $recovery"
     return $false
-  }
-  finally {
+  } finally {
     foreach ($stagedPath in $stagedPaths.Values) {
       Remove-Item -LiteralPath $stagedPath -Force -ErrorAction SilentlyContinue
     }
@@ -2428,7 +2445,53 @@ function Install-PwshProfileLocalSource {
   return $true
 }
 
+function Invoke-PwshProfileUpdateTransaction {
+  param([scriptblock] $Action)
+  $paths = Get-PwshProfileLocalStorePaths
+  $null = New-Item -ItemType Directory -Path $paths.Root -Force
+  $lockPath = Join-Path $paths.Root 'update.lock'
+  try { $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
+  catch { throw 'Another profile update is running. Retry after it completes.' }
+  $journalPath = Join-Path $paths.Root 'update-journal.json'
+  try {
+    if (Test-Path -LiteralPath $journalPath) {
+      $journal = Get-Content $journalPath -Raw | ConvertFrom-Json -ErrorAction Stop
+      # Recovery is deliberately explicit: never overwrite files edited after a crash.
+      throw "An interrupted update requires recovery. Journal: $journalPath. Restore the backups listed there, then remove the journal before retrying."
+    }
+    $script:PwshProfileJournalPath = $journalPath
+    $script:PwshProfileJournal = [Collections.Generic.List[object]]::new()
+    $result = & $Action
+    # A normal return means the implementation completed or handled its rollback.
+    # Keep failed transactions available for explicit recovery and inspection.
+    if ($result -eq $true) { Remove-Item -LiteralPath $journalPath -Force -ErrorAction SilentlyContinue }
+    $result
+  } finally {
+    try {
+      if ($script:PwshProfileJournal -and (Test-Path -LiteralPath $journalPath)) {
+        $restored = $true
+        foreach ($entry in $script:PwshProfileJournal) {
+          if ($entry.existed) {
+            if (-not (Test-Path -LiteralPath $entry.destination) -or
+              (Get-FileHash -LiteralPath $entry.destination).Hash -ne (Get-FileHash -LiteralPath $entry.backup).Hash) { $restored = $false }
+          } elseif (Test-Path -LiteralPath $entry.destination) { $restored = $false }
+        }
+        if ($restored) { Remove-Item -LiteralPath $journalPath -Force }
+      }
+    } catch { Write-Warning "Recovery journal retained: $journalPath" }
+    $script:PwshProfileJournalPath = $null
+    $script:PwshProfileJournal = $null
+    $lock.Dispose()
+  }
+}
+
 function Invoke-PwshProfileUpdate {
+  [CmdletBinding()]
+  param([string] $Repository = 'smoonlee/oh-my-posh-profile-dev', [switch] $Prerelease, [switch] $Bootstrap, [switch] $LocalSource)
+  Invoke-PwshProfileUpdateTransaction { Invoke-PwshProfileUpdateCore -Repository $Repository -Prerelease:$Prerelease -Bootstrap:$Bootstrap -LocalSource:$LocalSource }
+}
+
+function Invoke-PwshProfileUpdateCore {
   [CmdletBinding()]
   param (
     [string] $Repository = 'smoonlee/oh-my-posh-profile-dev',
@@ -2473,38 +2536,37 @@ function Invoke-PwshProfileUpdate {
   $tlsCertificateScriptPath = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.psm1'
   $tlsCertificateFormatPath = Join-Path $paths.Modules 'PwshProfile.TlsCertificate\PwshProfile.TlsCertificate.Format.ps1xml'
   $destinations = [ordered]@{
-    profile = $profilePath
-    theme = $themePath
-    setup = $setupPath
-    publicIPManifest = $publicIPManifestPath
-    publicIPScript = $publicIPScriptPath
-    networkCidrManifest = $networkCidrManifestPath
-    networkCidrScript = $networkCidrScriptPath
-    networkCidrFormat = $networkCidrFormatPath
-    endOfLifeManifest = $endOfLifeManifestPath
-    endOfLifeScript = $endOfLifeScriptPath
-    endOfLifeFormat = $endOfLifeFormatPath
+    profile                 = $profilePath
+    theme                   = $themePath
+    setup                   = $setupPath
+    publicIPManifest        = $publicIPManifestPath
+    publicIPScript          = $publicIPScriptPath
+    networkCidrManifest     = $networkCidrManifestPath
+    networkCidrScript       = $networkCidrScriptPath
+    networkCidrFormat       = $networkCidrFormatPath
+    endOfLifeManifest       = $endOfLifeManifestPath
+    endOfLifeScript         = $endOfLifeScriptPath
+    endOfLifeFormat         = $endOfLifeFormatPath
     azureKubernetesManifest = $azureKubernetesManifestPath
-    azureKubernetesScript = $azureKubernetesScriptPath
-    dnsManifest = $dnsManifestPath
-    dnsScript = $dnsScriptPath
-    dnsFormat = $dnsFormatPath
-    tlsCertificateManifest = $tlsCertificateManifestPath
-    tlsCertificateScript = $tlsCertificateScriptPath
-    tlsCertificateFormat = $tlsCertificateFormatPath
+    azureKubernetesScript   = $azureKubernetesScriptPath
+    dnsManifest             = $dnsManifestPath
+    dnsScript               = $dnsScriptPath
+    dnsFormat               = $dnsFormatPath
+    tlsCertificateManifest  = $tlsCertificateManifestPath
+    tlsCertificateScript    = $tlsCertificateScriptPath
+    tlsCertificateFormat    = $tlsCertificateFormatPath
   }
 
   $installed = $null
   if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
     try {
       $candidateManifest = Get-Content -LiteralPath $paths.VersionFile -Raw -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
+      ConvertFrom-Json -ErrorAction Stop
       if ($candidateManifest.schemaVersion -eq 2 -and
         $candidateManifest.version -and
         $candidateManifest.artifacts) {
         $installed = $candidateManifest
-      }
-      elseif (-not $Bootstrap) {
+      } elseif (-not $Bootstrap) {
         Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'The legacy OTA baseline must be migrated by running the Profile setup phase.'
         return $false
       }
@@ -2515,8 +2577,7 @@ function Invoke-PwshProfileUpdate {
       }
       Write-PwshProfileStatus -Stage 'Install' -Type Warning -Message 'The existing version manifest is invalid and will be replaced only after release verification succeeds.'
     }
-  }
-  elseif (-not $Bootstrap) {
+  } elseif (-not $Bootstrap) {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message 'No tracked installation baseline was found. Run the Profile setup phase first.'
     return $false
   }
@@ -2635,7 +2696,7 @@ function Invoke-PwshProfileUpdate {
   try {
     Save-PwshProfileReleaseAsset -Uri $releaseAssets[$manifestAssetName] -Destination $manifestTemporaryPath
     $remoteManifest = Get-Content -LiteralPath $manifestTemporaryPath -Raw -ErrorAction Stop |
-      ConvertFrom-Json -ErrorAction Stop
+    ConvertFrom-Json -ErrorAction Stop
   } catch {
     Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message "Could not retrieve the release manifest: $($_.Exception.Message)"
     return $false
@@ -2653,25 +2714,25 @@ function Invoke-PwshProfileUpdate {
   }
 
   $artifactNames = [ordered]@{
-    profile = 'Microsoft.PowerShell_profile.ps1'
-    theme = 'quick-term-cloud.omp.json'
-    setup = 'Invoke-PwshProfileSetup.ps1'
-    publicIPManifest = 'PwshProfile.PublicIP.psd1'
-    publicIPScript = 'PwshProfile.PublicIP.psm1'
-    networkCidrManifest = 'PwshProfile.NetworkCidr.psd1'
-    networkCidrScript = 'PwshProfile.NetworkCidr.psm1'
-    networkCidrFormat = 'PwshProfile.NetworkCidr.Format.ps1xml'
-    endOfLifeManifest = 'PwshProfile.EndOfLife.psd1'
-    endOfLifeScript = 'PwshProfile.EndOfLife.psm1'
-    endOfLifeFormat = 'PwshProfile.EndOfLife.Format.ps1xml'
+    profile                 = 'Microsoft.PowerShell_profile.ps1'
+    theme                   = 'quick-term-cloud.omp.json'
+    setup                   = 'Invoke-PwshProfileSetup.ps1'
+    publicIPManifest        = 'PwshProfile.PublicIP.psd1'
+    publicIPScript          = 'PwshProfile.PublicIP.psm1'
+    networkCidrManifest     = 'PwshProfile.NetworkCidr.psd1'
+    networkCidrScript       = 'PwshProfile.NetworkCidr.psm1'
+    networkCidrFormat       = 'PwshProfile.NetworkCidr.Format.ps1xml'
+    endOfLifeManifest       = 'PwshProfile.EndOfLife.psd1'
+    endOfLifeScript         = 'PwshProfile.EndOfLife.psm1'
+    endOfLifeFormat         = 'PwshProfile.EndOfLife.Format.ps1xml'
     azureKubernetesManifest = 'PwshProfile.AzureKubernetes.psd1'
-    azureKubernetesScript = 'PwshProfile.AzureKubernetes.psm1'
-    dnsManifest = 'PwshProfile.Dns.psd1'
-    dnsScript = 'PwshProfile.Dns.psm1'
-    dnsFormat = 'PwshProfile.Dns.Format.ps1xml'
-    tlsCertificateManifest = 'PwshProfile.TlsCertificate.psd1'
-    tlsCertificateScript = 'PwshProfile.TlsCertificate.psm1'
-    tlsCertificateFormat = 'PwshProfile.TlsCertificate.Format.ps1xml'
+    azureKubernetesScript   = 'PwshProfile.AzureKubernetes.psm1'
+    dnsManifest             = 'PwshProfile.Dns.psd1'
+    dnsScript               = 'PwshProfile.Dns.psm1'
+    dnsFormat               = 'PwshProfile.Dns.Format.ps1xml'
+    tlsCertificateManifest  = 'PwshProfile.TlsCertificate.psd1'
+    tlsCertificateScript    = 'PwshProfile.TlsCertificate.psm1'
+    tlsCertificateFormat    = 'PwshProfile.TlsCertificate.Format.ps1xml'
   }
   $stagedPaths = @{}
   try {
@@ -2718,7 +2779,7 @@ function Invoke-PwshProfileUpdate {
     $null = Import-PowerShellDataFile -LiteralPath $stagedPaths.tlsCertificateManifest -ErrorAction Stop
     $null = [xml](Get-Content -LiteralPath $stagedPaths.tlsCertificateFormat -Raw -ErrorAction Stop)
     $null = Get-Content -LiteralPath $stagedPaths.theme -Raw -ErrorAction Stop |
-      ConvertFrom-Json -ErrorAction Stop
+    ConvertFrom-Json -ErrorAction Stop
     $profileContent = Get-Content -LiteralPath $stagedPaths.profile -Raw -ErrorAction Stop
     if ($profileContent -notmatch "(?m)^\s*\`$script:PwshProfileVersion\s*=\s*'$([regex]::Escape($latestVersionText))'\s*$") {
       throw "The downloaded profile does not declare version '$latestVersionText'."
@@ -2730,6 +2791,16 @@ function Invoke-PwshProfileUpdate {
     }
     Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Release validation failed; no installed files were changed. $($_.Exception.Message)"
     return $false
+  }
+
+  if (-not $Bootstrap) {
+    try {
+      Protect-PwshProfileNewerModules -ArtifactNames $artifactNames -Destinations $destinations -StagedPaths $stagedPaths -InstalledBaseline $installed -ReleaseManifest $remoteManifest
+    } catch {
+      foreach ($path in $stagedPaths.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+      Write-PwshProfileStatus -Stage 'Update' -Type Warning -Message $_.Exception.Message
+      return $false
+    }
   }
 
   if ($Bootstrap) {
@@ -2789,16 +2860,16 @@ function Invoke-PwshProfileUpdate {
 
     $installedManifest = [ordered]@{
       schemaVersion = 2
-      version = $latestVersionText
-      tag = [string]$release.tag_name
-      channel = $channel
-      repository = $Repository
-      installedAt = [DateTimeOffset]::UtcNow.ToString('o')
-      artifacts = [ordered]@{}
+      version       = $latestVersionText
+      tag           = [string]$release.tag_name
+      channel       = $channel
+      repository    = $Repository
+      installedAt   = [DateTimeOffset]::UtcNow.ToString('o')
+      artifacts     = [ordered]@{}
     }
     foreach ($name in $artifactNames.Keys) {
       $installedManifest.artifacts[$name] = [ordered]@{
-        file = $artifactNames[$name]
+        file   = $artifactNames[$name]
         sha256 = ([string]$remoteManifest.artifacts.$name.sha256).ToLowerInvariant()
       }
     }
@@ -2809,27 +2880,21 @@ function Invoke-PwshProfileUpdate {
       "$versionJson`n",
       [System.Text.UTF8Encoding]::new($false)
     )
-    if (Test-Path -LiteralPath $paths.VersionFile -PathType Leaf) {
-      $versionBackupPath = "$($paths.VersionFile).$backupTimestamp.bak"
-      [System.IO.File]::Replace(
-        [System.IO.Path]::GetFullPath($versionTemporaryPath),
-        [System.IO.Path]::GetFullPath($paths.VersionFile),
-        [System.IO.Path]::GetFullPath($versionBackupPath),
-        $true
-      )
-    } else {
-      [System.IO.File]::Move($versionTemporaryPath, $paths.VersionFile)
-    }
+    Install-PwshProfileAtomicFile -StagedPath $versionTemporaryPath -Destination $paths.VersionFile -BackupPath "$($paths.VersionFile).$backupTimestamp.bak"
   } catch {
+    $installFailure = $_
+    $rollbackErrors = @()
     foreach ($name in @($replaced)) {
-      if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
-        Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction SilentlyContinue
-      }
-      elseif (-not $destinationExisted[$name]) {
-        Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction SilentlyContinue
-      }
+      try {
+        if ($backups.ContainsKey($name) -and (Test-Path -LiteralPath $backups[$name] -PathType Leaf)) {
+          Copy-Item -LiteralPath $backups[$name] -Destination $destinations[$name] -Force -ErrorAction Stop
+        } elseif (-not $destinationExisted[$name]) {
+          Remove-Item -LiteralPath $destinations[$name] -Force -ErrorAction Stop
+        } else { throw "Backup missing for $($destinations[$name])" }
+      } catch { $rollbackErrors += "$($destinations[$name]): $($_.Exception.Message)" }
     }
-    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Installation failed and the previous files were restored. $($_.Exception.Message)"
+    $recovery = if ($rollbackErrors.Count) { "Rollback incomplete: $($rollbackErrors -join '; '). Retained backups: $($backups.Values -join ', ')" } else { 'Previous files were restored.' }
+    Write-PwshProfileStatus -Stage $operation -Type Warning -Message "Installation failed. $($installFailure.Exception.Message) $recovery"
     return $false
   } finally {
     foreach ($stagedPath in $stagedPaths.Values) {
@@ -2862,11 +2927,11 @@ function Get-PwshProfileModuleGitHubRelease {
 
   if (-not $PSBoundParameters.ContainsKey('Releases')) {
     try {
-      $Releases = @(Invoke-RestMethod `
-        -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
-        -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
-        -TimeoutSec 15 `
-        -ErrorAction Stop)
+      $Releases = @(Get-PwshProfileReleasePages `
+          -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
+          -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
+          -TimeoutSec 15 `
+          -ErrorAction Stop)
     } catch {
       throw "Could not query module releases for $ModuleName. $($_.Exception.Message)"
     }
@@ -2893,7 +2958,41 @@ function Get-PwshProfileModuleGitHubRelease {
   $selected
 }
 
+function Protect-PwshProfileNewerModules {
+  param($ArtifactNames, $Destinations, $StagedPaths, $InstalledBaseline, $ReleaseManifest)
+
+  foreach ($key in $ArtifactNames.Keys) {
+    $file = [string]$ArtifactNames[$key]
+    if ($file -notmatch '^(PwshProfile\..+)\.psd1$') { continue }
+    $moduleName = $Matches[1]
+    if (-not (Test-Path -LiteralPath $Destinations[$key] -PathType Leaf)) { continue }
+    $localVersion = [string](Import-PowerShellDataFile -LiteralPath $Destinations[$key]).ModuleVersion
+    $bundleVersion = [string](Import-PowerShellDataFile -LiteralPath $StagedPaths[$key]).ModuleVersion
+    if ((Compare-PwshProfileSemanticVersion -Left $localVersion -Right $bundleVersion) -le 0) { continue }
+    foreach ($assetKey in $ArtifactNames.Keys) {
+      if ([string]$ArtifactNames[$assetKey] -notlike "$moduleName.*") { continue }
+      $baselineEntry = $InstalledBaseline.artifacts.PSObject.Properties[$assetKey]
+      if (-not $baselineEntry) { throw "Cannot preserve $moduleName without a verified baseline for $assetKey." }
+      $actualHash = (Get-FileHash -LiteralPath $Destinations[$assetKey] -Algorithm SHA256 -ErrorAction Stop).Hash
+      if ($actualHash -ine $baselineEntry.Value.sha256) { throw "Cannot preserve modified module asset: $assetKey" }
+      Copy-Item -LiteralPath $Destinations[$assetKey] -Destination $StagedPaths[$assetKey] -Force -ErrorAction Stop
+      if ((Get-FileHash -LiteralPath $StagedPaths[$assetKey] -Algorithm SHA256).Hash -ine $actualHash) {
+        throw "Module asset changed while being preserved: $assetKey"
+      }
+      $ReleaseManifest.artifacts.$assetKey.sha256 = $actualHash.ToLowerInvariant()
+    }
+    Write-PwshProfileStatus -Stage 'Module' -Type Current -Message "Preserving $moduleName $localVersion; bundle contains $bundleVersion."
+  }
+}
+
 function Invoke-PwshProfileModuleUpdate {
+  [CmdletBinding()]
+  param([Parameter(Mandatory)][string] $ModuleName, [string] $Repository = 'smoonlee/oh-my-posh-profile-dev', [switch] $Prerelease, [object[]] $Releases)
+  $parameters = @{} + $PSBoundParameters
+  Invoke-PwshProfileUpdateTransaction { Invoke-PwshProfileModuleUpdateCore @parameters }
+}
+
+function Invoke-PwshProfileModuleUpdateCore {
   [CmdletBinding()]
   param (
     [Parameter(Mandatory)]
@@ -2979,10 +3078,32 @@ function Invoke-PwshProfileModuleUpdate {
   if (-not $artifactNames.Contains('manifest') -or -not $artifactNames.Contains('script')) {
     throw 'The module release must contain manifest and script artifacts.'
   }
+  $baselineStage = $null
   $staged = @{}
   try {
+    # Independent updates share the bundle baseline so subsequent bundle updates
+    # recognize these files as verified releases, rather than local edits.
+    $baselinePath = Join-Path $paths.Root 'version.json'
+    $baseline = Get-Content -LiteralPath $baselinePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    if ($baseline.schemaVersion -ne 2 -or -not $baseline.artifacts) {
+      throw 'A valid profile baseline is required. Run the Profile setup phase first.'
+    }
+    $baselineEntries = @{}
+    foreach ($entry in $baseline.artifacts.PSObject.Properties) {
+      if ([string]$entry.Value.file -like "$ModuleName.*") {
+        $baselineEntries[[string]$entry.Value.file] = $entry.Value
+        $trackedPath = Join-Path $moduleRoot $entry.Value.file
+        if (-not (Test-Path -LiteralPath $trackedPath -PathType Leaf) -or
+          (Get-FileHash -LiteralPath $trackedPath -Algorithm SHA256 -ErrorAction Stop).Hash -ine $entry.Value.sha256) {
+          throw "Update refused: tracked module file differs from its baseline: $trackedPath"
+        }
+      }
+    }
     foreach ($name in $artifactNames.Keys) {
       $assetName = $artifactNames[$name]
+      if (-not $baselineEntries.ContainsKey($assetName)) {
+        throw "Module asset '$assetName' has no bundle baseline entry. Install a profile bundle containing it first."
+      }
       $artifact = $releaseManifest.artifacts.$name
       $expectedHash = [string]$artifact.sha256
       if ([string]$artifact.asset -ne $assetName -or
@@ -3012,6 +3133,11 @@ function Invoke-PwshProfileModuleUpdate {
     foreach ($name in @($artifactNames.Keys | Where-Object { $artifactNames[$_] -like '*.ps1xml' })) {
       $null = [xml](Get-Content -LiteralPath $staged[$name] -Raw -ErrorAction Stop)
     }
+    foreach ($name in $artifactNames.Keys) {
+      $baselineEntries[$artifactNames[$name]].sha256 = [string]$releaseManifest.artifacts.$name.sha256
+    }
+    $baselineStage = "$baselinePath.$PID.module-update"
+    [IO.File]::WriteAllText($baselineStage, ($baseline | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
   } catch {
     foreach ($path in $staged.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
     throw "Module release validation failed; no installed files were changed. $($_.Exception.Message)"
@@ -3033,6 +3159,9 @@ function Invoke-PwshProfileModuleUpdate {
     }
     # Treat a failed import as an installation failure and restore the old files.
     if ($wasLoaded) { Import-Module -Name $installedManifestPath -Global -Force -ErrorAction Stop }
+    if ($baselineStage) {
+      Install-PwshProfileAtomicFile -StagedPath $baselineStage -Destination $baselinePath -BackupPath "$baselinePath.$timestamp.bak"
+    }
   } catch {
     $installFailure = $_
     $rollbackErrors = @()
@@ -3042,12 +3171,10 @@ function Invoke-PwshProfileModuleUpdate {
       try {
         if (Test-Path -LiteralPath $backups[$name] -PathType Leaf) {
           Copy-Item -LiteralPath $backups[$name] -Destination $destination -Force -ErrorAction Stop
-        }
-        else {
+        } else {
           Remove-Item -LiteralPath $destination -Force -ErrorAction Stop
         }
-      }
-      catch { $rollbackErrors += $_.Exception.Message }
+      } catch { $rollbackErrors += $_.Exception.Message }
     }
     if ($wasLoaded) {
       try { Import-Module -Name $installedManifestPath -Global -Force -ErrorAction Stop }
@@ -3059,6 +3186,7 @@ function Invoke-PwshProfileModuleUpdate {
     throw "Module installation failed; previous files and loaded state were restored. $($installFailure.Exception.Message)"
   } finally {
     foreach ($path in $staged.Values) { Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue }
+    if ($baselineStage) { Remove-Item -LiteralPath $baselineStage -Force -ErrorAction SilentlyContinue }
   }
   Write-PwshProfileStatus -Stage 'Complete' -Type Success -Message "Updated $ModuleName to $latestVersion."
   Write-Host ''
@@ -3073,11 +3201,11 @@ function Invoke-PwshProfileIndependentModuleUpdates {
   )
 
   try {
-    $releases = @(Invoke-RestMethod `
-      -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
-      -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
-      -TimeoutSec 15 `
-      -ErrorAction Stop)
+    $releases = @(Get-PwshProfileReleasePages `
+        -Uri "https://api.github.com/repos/$Repository/releases?per_page=100" `
+        -Headers @{ 'User-Agent' = 'pwsh-profile-module-updater' } `
+        -TimeoutSec 15 `
+        -ErrorAction Stop)
   } catch {
     Write-PwshProfileStatus -Stage 'Module' -Type Warning -Message "Could not query independent module releases. $($_.Exception.Message)"
     return $false
@@ -3098,10 +3226,10 @@ function Invoke-PwshProfileIndependentModuleUpdates {
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { continue }
     try {
       if (-not (Invoke-PwshProfileModuleUpdate `
-        -ModuleName $moduleName `
-        -Repository $Repository `
-        -Prerelease:$Prerelease `
-        -Releases $releases)) {
+            -ModuleName $moduleName `
+            -Repository $Repository `
+            -Prerelease:$Prerelease `
+            -Releases $releases)) {
         $success = $false
       }
     } catch {
@@ -3210,7 +3338,7 @@ function Invoke-PowerShellModuleConfiguration {
   $summary = [ordered]@{
     Updated = 0
     Current = 0
-    Failed = 0
+    Failed  = 0
   }
 
   foreach ($module in $modules) {
@@ -3236,11 +3364,11 @@ function Get-CrossPlatformSupportPaths {
 
   # The host that launched the installer is the source of truth; the other version is linked to it.
   [pscustomobject]@{
-    SourceRoot = if ($isPwsh7) { $pwsh7Root } else { $pwsh5Root }
-    TargetRoot = if ($isPwsh7) { $pwsh5Root } else { $pwsh7Root }
+    SourceRoot  = if ($isPwsh7) { $pwsh7Root } else { $pwsh5Root }
+    TargetRoot  = if ($isPwsh7) { $pwsh5Root } else { $pwsh7Root }
     SourceLabel = if ($isPwsh7) { 'PowerShell 7' } else { 'PowerShell 5.1' }
     TargetLabel = if ($isPwsh7) { 'PowerShell 5.1' } else { 'PowerShell 7' }
-    Pwsh7Root = $pwsh7Root
+    Pwsh7Root   = $pwsh7Root
   }
 }
 
@@ -3428,22 +3556,22 @@ function Get-PwshProfileResetTargets {
   ) | Select-Object -Unique
   $stalePowerShellRoots = @(
     Get-ChildItem -LiteralPath $DocumentsPath -Directory -Force -ErrorAction SilentlyContinue |
-      Where-Object {
+    Where-Object {
       $_.Name -like 'PowerShell.reset-*' -or
       $_.Name -like 'WindowsPowerShell.reset-*'
     } |
-      Select-Object -ExpandProperty FullName
+    Select-Object -ExpandProperty FullName
   )
 
   [pscustomobject]@{
-    PowerShellRoots = @(
+    PowerShellRoots      = @(
       Join-Path $DocumentsPath 'PowerShell'
       Join-Path $DocumentsPath 'WindowsPowerShell'
     )
     StalePowerShellRoots = $stalePowerShellRoots
-    LocalStore = Join-Path $AppDataPath 'PwshProfile'
-    LegacyThemes = @($legacyThemePaths)
-    StateRegistry = $StateRegistryPath
+    LocalStore           = Join-Path $AppDataPath 'PwshProfile'
+    LegacyThemes         = @($legacyThemePaths)
+    StateRegistry        = $StateRegistryPath
   }
 }
 
@@ -3475,15 +3603,15 @@ function Start-PwshProfileReplacementSession {
 
   $deferredFullPaths = @(
     $DeferredPaths |
-      Where-Object { $_ } |
-      ForEach-Object { [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) }
+    Where-Object { $_ } |
+    ForEach-Object { [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) }
   )
   $pathSeparator = [System.IO.Path]::PathSeparator
   $originalPSModulePath = $env:PSModulePath
   $replacementPSModulePath = @(
     [string]$originalPSModulePath -split [regex]::Escape([string]$pathSeparator) |
-      Where-Object { $_ } |
-      Where-Object {
+    Where-Object { $_ } |
+    Where-Object {
       $modulePath = [System.IO.Path]::GetFullPath($_).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
       -not @($deferredFullPaths | Where-Object {
           $modulePath.Equals($_, [System.StringComparison]::OrdinalIgnoreCase) -or
@@ -3540,8 +3668,7 @@ if (`$paths.Count -gt 0 -and `$failedPaths.Count -eq 0) {
   try {
     $env:PSModulePath = $replacementPSModulePath
     Start-Process -FilePath $powerShellExecutable -ArgumentList $arguments -NoNewWindow -PassThru -ErrorAction Stop
-  }
-  finally {
+  } finally {
     $env:PSModulePath = $originalPSModulePath
   }
 }
@@ -3615,15 +3742,15 @@ function Invoke-PwshProfileModuleUnload {
   $preservedModuleNames = @('PSReadLine', 'PowerShellGet', 'PackageManagement')
   $modulesToUnload = @(
     $Modules |
-      Where-Object { $_.Name -notin $preservedModuleNames } |
-      Where-Object {
+    Where-Object { $_.Name -notin $preservedModuleNames } |
+    Where-Object {
       if ($Phase -eq 'BeforeCleanup') {
         $_.Name -notlike 'Microsoft.PowerShell.*'
       } else {
         $_.Name -like 'Microsoft.PowerShell.*'
       }
     } |
-      Sort-Object Name, Version -Descending
+    Sort-Object Name, Version -Descending
   )
 
   if ($Phase -eq 'BeforeCleanup') {
@@ -3837,8 +3964,7 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
     if ($installedNerdFontFiles.Count -gt 0) {
       Update-WindowsTerminalFromNerdFontFiles -FontFiles $installedNerdFontFiles
     }
-  }
-  else {
+  } else {
     Write-PwshProfileStatus -Stage 'Action' -Type Action -Message "$nerdFontName requires installation: $($installDecision.Reason)."
     if (-not (Test-PwshProfileAdministrator)) {
       Start-PwshProfileElevated `
@@ -3853,8 +3979,7 @@ if ($RunPhase -in @('All', 'NerdFont') -and $nerdFontName) {
       if ($RunPhase -eq 'NerdFont') {
         return
       }
-    }
-    else {
+    } else {
       $newlyInstalledFontFiles = @(
         Install-NerdFont `
           -Font $selectedNerdFont `

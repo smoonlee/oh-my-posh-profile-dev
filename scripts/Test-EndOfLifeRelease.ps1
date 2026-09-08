@@ -40,9 +40,14 @@ $setupAst = [Management.Automation.Language.Parser]::ParseFile($setupPath, [ref]
 if ($setupErrors.Count) { throw ($setupErrors.Message -join '; ') }
 foreach ($functionName in @(
   'Compare-PwshProfileSemanticVersion',
+  'Get-PwshProfileReleasePages',
   'Get-PwshProfileGitHubRelease',
   'Get-PwshProfileModuleGitHubRelease',
   'Invoke-PwshProfileModuleUpdate'
+  'Invoke-PwshProfileModuleUpdateCore'
+  'Invoke-PwshProfileUpdateTransaction'
+  'Protect-PwshProfileNewerModules'
+  'Install-PwshProfileAtomicFile'
 )) {
   $definition = $setupAst.Find({
       param($node)
@@ -121,8 +126,70 @@ function Test-PwshProfileScriptFile {
   [void][Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors)
   if ($errors.Count) { throw ($errors.Message -join '; ') }
 }
-function Install-PwshProfileAtomicFile { param($StagedPath, $Destination, $BackupPath) Copy-Item $StagedPath $Destination -Force }
+$atomicImplementation = ${function:Install-PwshProfileAtomicFile}
+function Install-PwshProfileAtomicFile {
+  param($StagedPath, $Destination, $BackupPath)
+  if ($script:FailMetadata -and $Destination -eq $baselinePath) { throw 'Injected metadata failure' }
+  & $atomicImplementation -StagedPath $StagedPath -Destination $Destination -BackupPath $BackupPath
+}
+$baselinePath = Join-Path $testRoot 'installed/version.json'
+$baseline = @{ schemaVersion = 2; version = '4.0.0'; artifacts = @{} }
+foreach ($entry in $artifactFiles.GetEnumerator()) {
+  $baseline.artifacts[$entry.Key] = @{ file = $entry.Value; sha256 = (Get-FileHash (Join-Path $moduleStore $entry.Value)).Hash }
+}
+$baseline | ConvertTo-Json -Depth 8 | Set-Content $baselinePath
+$originalScript = Get-Content (Join-Path $moduleStore "$moduleName.psm1") -Raw
+Add-Content (Join-Path $moduleStore "$moduleName.psm1") '# local edit'
+$refused = $false
+try { Invoke-PwshProfileModuleUpdate -ModuleName $moduleName -Repository 'test/repository' } catch {
+  if ($_.Exception.Message -notlike '*differs from its baseline*') { throw }
+  $refused = $true
+}
+if (-not $refused) { throw 'Independent update overwrote local edits.' }
+[IO.File]::WriteAllText((Join-Path $moduleStore "$moduleName.psm1"), $originalScript)
+$baselineHash = (Get-FileHash $baselinePath).Hash
+$script:FailMetadata = $true
+$refused = $false
+try { Invoke-PwshProfileModuleUpdate -ModuleName $moduleName -Repository 'test/repository' } catch {
+  if ($_.Exception.Message -notlike '*Injected metadata failure*') { throw }
+  $refused = $true
+}
+if (-not $refused) { throw 'Metadata failure was not exercised.' }
+if ((Get-FileHash $baselinePath).Hash -ne $baselineHash) { throw 'Failed commit changed metadata.' }
+foreach ($entry in $baseline.artifacts.Values) {
+  if ((Get-FileHash (Join-Path $moduleStore $entry.file)).Hash -ine $entry.sha256) { throw 'Failed metadata commit did not restore module files.' }
+}
+$script:FailMetadata = $false
+Write-Host 'PASS: metadata commit failure restores original module and baseline.'
 [void](Invoke-PwshProfileModuleUpdate -ModuleName $moduleName -Repository 'test/repository')
+$updatedBaseline = Get-Content $baselinePath -Raw | ConvertFrom-Json
+foreach ($entry in $updatedBaseline.artifacts.PSObject.Properties) {
+  if ((Get-FileHash (Join-Path $moduleStore $entry.Value.file)).Hash -ine $entry.Value.sha256) {
+    throw 'Independent update left bundle baseline stale.'
+  }
+}
+Write-Host 'PASS: independent updates reject drift and refresh bundle baseline hashes.'
+$bundleStage = @{}
+$bundleDestinations = @{}
+foreach ($entry in $artifactFiles.GetEnumerator()) {
+  $bundleStage[$entry.Key] = Join-Path $testRoot ($entry.Value + '.bundle')
+  $bundleDestinations[$entry.Key] = Join-Path $moduleStore $entry.Value
+  Copy-Item $bundleDestinations[$entry.Key] $bundleStage[$entry.Key]
+}
+foreach ($bundleVersion in @('1.0.1', '1.2.0')) {
+  Set-Content $bundleStage.manifest "@{ RootModule='$moduleName.psm1'; ModuleVersion='$bundleVersion' }"
+  Set-Content $bundleStage.script 'function Get-BundleValue { 3 }'
+  $bundleMetadata = $moduleReleaseManifest | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  Protect-PwshProfileNewerModules -ArtifactNames $artifactFiles -Destinations $bundleDestinations -StagedPaths $bundleStage -InstalledBaseline $updatedBaseline -ReleaseManifest $bundleMetadata
+  $expectedVersion = if ($bundleVersion -eq '1.0.1') { '1.1.0' } else { '1.2.0' }
+  if ((Import-PowerShellDataFile $bundleStage.manifest).ModuleVersion -ne $expectedVersion) { throw 'Bundle would downgrade or incorrectly pin a module.' }
+  if ($bundleVersion -eq '1.0.1') {
+    foreach ($entry in $artifactFiles.GetEnumerator()) {
+      if ((Get-FileHash $bundleStage[$entry.Key]).Hash -ine $bundleMetadata.artifacts.($entry.Key).sha256) { throw 'Preserved bundle hashes disagree with staged files.' }
+    }
+  }
+}
+Write-Host 'PASS: older bundle preserves independent module and hashes; newer bundle permits upgrade.'
 if ((Import-PowerShellDataFile (Join-Path $moduleStore "$moduleName.psd1")).ModuleVersion -ne '1.1.0') {
   throw 'Independent module installation failed.'
 }

@@ -2,6 +2,7 @@ name: Publish Pwsh Profile Module Updates
 
 on:
   pull_request:
+    branches: [main]
     types: [closed]
     paths:
       - 'src/modules/**/*.psd1'
@@ -40,6 +41,7 @@ jobs:
             gh api "repos/$env:GITHUB_REPOSITORY/pulls/$env:PR_NUMBER/files" --paginate --jq '.[].filename' |
               Where-Object { $_ -match '^src/modules/(?<name>PwshProfile\.[A-Za-z0-9_.-]+)/\k<name>\.psd1$' }
           )
+          if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate changed module manifests.' }
           foreach ($manifestPath in $manifestPaths) {
             $moduleName = [IO.Path]::GetFileNameWithoutExtension($manifestPath)
             $moduleRoot = Split-Path $manifestPath -Parent
@@ -116,6 +118,7 @@ jobs:
               version = $version
               tag = $tag
               repository = '${{ github.repository }}'
+              commit = $env:TARGET_SHA
               minimumPowerShellVersion = [string]$module.PowerShellVersion
               artifacts = $releaseAssets
             }
@@ -126,18 +129,42 @@ jobs:
             $notesPath = Join-Path $stageRoot 'release-notes.md'
             [IO.File]::WriteAllText($notesPath, $releaseNotes, [Text.UTF8Encoding]::new($false))
 
+            $alreadyPublished = $false
             gh release view $tag *> $null
             if ($LASTEXITCODE -eq 0) {
+              $existing = gh release view $tag --json isDraft | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0) { throw "Could not read release $tag." }
+              $alreadyPublished = -not $existing.isDraft
               $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq .sha
-              if ($tagCommit -ne $env:TARGET_SHA) { throw "Release $tag already points to another commit." }
+              if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:TARGET_SHA) { throw "Release $tag already points to another commit or could not be resolved." }
             } else {
               gh release create $tag --target $env:TARGET_SHA --title $tag --notes-file $notesPath --draft
               if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
             }
             $uploadPaths = @($assetDefinitions.Values | ForEach-Object { Join-Path $stageRoot $_ })
             $uploadPaths += $releaseManifestPath
-            gh release upload $tag @uploadPaths --clobber
-            if ($LASTEXITCODE -ne 0) { throw "Could not upload all assets for $tag." }
+            if (-not $alreadyPublished) {
+              $draft = gh release view $tag --json isDraft | ConvertFrom-Json
+              if ($LASTEXITCODE -ne 0 -or -not $draft.isDraft) { throw 'Uploads require a draft release.' }
+              gh release upload $tag @uploadPaths --clobber
+              if ($LASTEXITCODE -ne 0) { throw "Could not upload all assets for $tag." }
+            }
+            $verifyRoot = Join-Path $stageRoot 'verified'
+            New-Item -ItemType Directory -Path $verifyRoot -Force | Out-Null
+            gh release download $tag --dir $verifyRoot
+            if ($LASTEXITCODE -ne 0) { throw "Could not download assets for verification: $tag" }
+            foreach ($path in $uploadPaths) {
+              $download = Join-Path $verifyRoot ([IO.Path]::GetFileName($path))
+              if (-not (Test-Path $download) -or (Get-FileHash $download).Hash -ne (Get-FileHash $path).Hash) {
+                throw "Uploaded asset verification failed: $path"
+              }
+            }
+            $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq .sha
+            if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:TARGET_SHA) { throw "Tag $tag does not match packaged commit." }
+            if ($alreadyPublished) {
+              Write-Host "Verified already published $tag; continuing remaining modules."
+              continue
+            }
             gh release edit $tag --draft=false --latest=false
             if ($LASTEXITCODE -ne 0) { throw "Could not publish $tag." }
           }

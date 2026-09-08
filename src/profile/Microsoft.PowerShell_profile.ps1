@@ -8,6 +8,16 @@ $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
 
+function global:Get-PwshProfileReleasePages {
+  [CmdletBinding()]
+  param([string] $Uri, [hashtable] $Headers, [int] $TimeoutSec = 15)
+  for ($page = 1; ; $page++) {
+    $items = @(Invoke-RestMethod -Uri "$Uri&page=$page" -Headers $Headers -TimeoutSec $TimeoutSec -ErrorAction Stop)
+    $items
+    if ($items.Count -lt 100) { break }
+  }
+}
+
 function global:Compare-PwshProfileSemanticVersion {
   [CmdletBinding()]
   param (
@@ -112,7 +122,7 @@ function global:Get-PwshProfile {
   $remoteQuerySucceeded = $false
   if (-not $SettingsOnly) {
     try {
-      $releases = Invoke-RestMethod `
+      $releases = Get-PwshProfileReleasePages `
         -Uri 'https://api.github.com/repos/smoonlee/oh-my-posh-profile-dev/releases?per_page=100' `
         -Headers @{ 'User-Agent' = 'pwsh-profile-status' } `
         -TimeoutSec 15 `
@@ -697,6 +707,8 @@ function Compare-PwshProfileSemanticVersion {
 __COMPARE_FUNCTION_BODY__
 }
 
+__RELEASE_PAGES_FUNCTION__
+
 $statePath = '__STATE_PATH__'
 $repository = '__REPOSITORY__'
 $prerelease = [bool]::Parse('__PRERELEASE__')
@@ -712,7 +724,7 @@ $state = [ordered]@{
   error = $null
 }
 try {
-  $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/releases?per_page=100" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
+  $releases = Get-PwshProfileReleasePages -Uri "https://api.github.com/repos/$repository/releases?per_page=100" -Headers @{ 'User-Agent' = 'pwsh-profile-update-check' } -TimeoutSec 5 -ErrorAction Stop
   if ($prerelease) {
     $release = $null
     $selectedVersion = $null
@@ -777,6 +789,7 @@ Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
 '@
   $checkScript = $checkTemplate.
   Replace('__COMPARE_FUNCTION_BODY__', $compareFunctionBody).
+  Replace('__RELEASE_PAGES_FUNCTION__', ('function Get-PwshProfileReleasePages {' + ${function:global:Get-PwshProfileReleasePages}.ToString() + '}')).
   Replace('__STATE_PATH__', $escapedStatePath).
   Replace('__REPOSITORY__', $escapedRepository).
   Replace('__PRERELEASE__', ([bool]$Prerelease).ToString())
@@ -849,7 +862,10 @@ if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
         }
       }
     }
-    $poshModule = Get-Module -Name oh-my-posh-core
+    # Resolve the module owning the active prompt; a name lookup can return
+    # stale instances after reloading the profile.
+    $poshModule = (Get-Command prompt -CommandType Function -ErrorAction Ignore).Module
+    if ($poshModule -and $poshModule.Name -ne 'oh-my-posh-core') { $poshModule = $null }
     if ($poshModule) {
       Install-PwshProfilePoshContext -Module $poshModule
     }
@@ -942,7 +958,10 @@ function global:Invoke-PwshProfileCompletionProcess {
   }
 }
 
-if ((Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore) -and
+# Completion process arguments and process-tree cleanup require PowerShell 7.
+# Windows PowerShell 5.1 retains the normal CLI without this custom completer.
+if ($PSVersionTable.PSVersion.Major -ge 7 -and
+  (Get-Command -Name Register-ArgumentCompleter -ErrorAction Ignore) -and
   (Get-Command -Name az -ErrorAction Ignore)) {
   Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
@@ -1066,11 +1085,15 @@ catch {
 
 $profileSettings = Get-PwshProfile -SettingsOnly
 Import-PwshProfileModules -Settings $profileSettings
-Start-PwshProfileUpdateCheck `
+try {
+  Start-PwshProfileUpdateCheck `
   -StorePath $script:PwshProfileStorePath `
   -Repository $script:PwshProfileRepository `
   -CurrentVersion $script:PwshProfileVersion `
   -Prerelease:$profileSettings.EnablePreReleaseUpdate
+} catch {
+  Write-Verbose "Optional profile update check failed: $($_.Exception.Message)"
+}
 
 Remove-Item Function:Import-PwshProfileModules -ErrorAction Ignore
 Remove-Item Function:Start-PwshProfileUpdateCheck -ErrorAction Ignore

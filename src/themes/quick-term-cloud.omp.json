@@ -54,7 +54,7 @@
           "style": "powerline",
           "powerline_symbol": "\ue0b0",
           "template": " {{ .Path | lower }} ",
-          "foreground": "#111111",
+          "foreground": "#ffffff",
           "background": "#0087af",
           "options": {
             "style": "agnoster_short",

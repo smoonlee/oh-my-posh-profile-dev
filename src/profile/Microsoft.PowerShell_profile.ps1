@@ -37,7 +37,7 @@ function global:Compare-PwshProfileSemanticVersion {
     }
 
     [pscustomobject]@{
-      Core = [version]$Matches.core
+      Core       = [version]$Matches.core
       Prerelease = if ($Matches.prerelease) { @($Matches.prerelease -split '\.') } else { @() }
     }
   }
@@ -66,14 +66,11 @@ function global:Compare-PwshProfileSemanticVersion {
       $identifierComparison = [System.Numerics.BigInteger]::Parse($leftIdentifier).CompareTo(
         [System.Numerics.BigInteger]::Parse($rightIdentifier)
       )
-    }
-    elseif ($leftIsNumeric) {
+    } elseif ($leftIsNumeric) {
       $identifierComparison = -1
-    }
-    elseif ($rightIsNumeric) {
+    } elseif ($rightIsNumeric) {
       $identifierComparison = 1
-    }
-    else {
+    } else {
       $identifierComparison = [string]::CompareOrdinal($leftIdentifier, $rightIdentifier)
     }
     if ($identifierComparison -ne 0) {
@@ -102,7 +99,7 @@ function global:Get-PwshProfile {
   if (Test-Path -LiteralPath $configPath -PathType Leaf) {
     try {
       $settings = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
+      ConvertFrom-Json -ErrorAction Stop
       $enablePreReleaseUpdate = [bool]$settings.enablePreReleaseUpdate
       $enablePublicIP = [bool]$settings.enablePublicIP
       $enableNetworkCidr = [bool]$settings.enableNetworkCidr
@@ -110,8 +107,7 @@ function global:Get-PwshProfile {
       $enableAzureKubernetes = [bool]$settings.enableAzureKubernetes
       $enableDns = [bool]$settings.enableDns
       $enableTlsCertificate = [bool]$settings.enableTlsCertificate
-    }
-    catch {
+    } catch {
       Write-Warning "Ignoring invalid Pwsh Profile settings at '$configPath'."
     }
   }
@@ -153,64 +149,60 @@ function global:Get-PwshProfile {
             (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $previewVersion) -gt 0) {
             $previewVersion = $candidateVersion
           }
-        }
-        elseif (-not $stableVersion -or
+        } elseif (-not $stableVersion -or
           (Compare-PwshProfileSemanticVersion -Left $candidateVersion -Right $stableVersion) -gt 0) {
           $stableVersion = $candidateVersion
         }
       }
-    }
-    catch {
+    } catch {
       Write-Warning "Could not query published Pwsh Profile versions. $($_.Exception.Message)"
     }
   }
 
   $optionalModules = @(
     [pscustomobject]@{
-      Name = 'PwshProfile.PublicIP'
-      Enabled = $enablePublicIP
+      Name        = 'PwshProfile.PublicIP'
+      Enabled     = $enablePublicIP
       Description = 'Look up public IP address details'
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.NetworkCidr'
-      Enabled = $enableNetworkCidr
+      Name        = 'PwshProfile.NetworkCidr'
+      Enabled     = $enableNetworkCidr
       Description = 'Subnet / CIDR range calculator'
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.EndOfLife'
-      Enabled = $enableEndOfLife
+      Name        = 'PwshProfile.EndOfLife'
+      Enabled     = $enableEndOfLife
       Description = 'Product end-of-life and support lookup'
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.AzureKubernetes'
-      Enabled = $enableAzureKubernetes
+      Name        = 'PwshProfile.AzureKubernetes'
+      Enabled     = $enableAzureKubernetes
       Description = 'AKS version and upgrade helper'
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.Dns'
-      Enabled = $enableDns
+      Name        = 'PwshProfile.Dns'
+      Enabled     = $enableDns
       Description = 'DNS resolution helper'
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.TlsCertificate'
-      Enabled = $enableTlsCertificate
+      Name        = 'PwshProfile.TlsCertificate'
+      Enabled     = $enableTlsCertificate
       Description = 'TLS certificate inspection and PFX tools'
     }
   )
   $selectedRemoteVersion = if ($enablePreReleaseUpdate) {
     $previewVersion
-  }
-  else {
+  } else {
     $stableVersion
   }
   $bundleUpdateAvailable = $false
   if ($selectedRemoteVersion) {
     try {
       $bundleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
-        -Left $selectedRemoteVersion `
-        -Right $global:PwshProfileVersion) -gt 0
-    }
-    catch {
+          -Left $selectedRemoteVersion `
+          -Right $global:PwshProfileVersion) -gt 0
+    } catch {
       $bundleUpdateAvailable = $false
     }
   }
@@ -226,8 +218,7 @@ function global:Get-PwshProfile {
           if ($moduleManifest.ModuleVersion) {
             $moduleVersion = [string]$moduleManifest.ModuleVersion
           }
-        }
-        catch {
+        } catch {
           $moduleVersion = 'Invalid manifest'
         }
       }
@@ -239,8 +230,8 @@ function global:Get-PwshProfile {
       if ($moduleInstalled -and $moduleVersion -and $latestModuleVersion) {
         try {
           $moduleUpdateAvailable = (Compare-PwshProfileSemanticVersion `
-            -Left $latestModuleVersion `
-            -Right $moduleVersion) -gt 0
+              -Left $latestModuleVersion `
+              -Right $moduleVersion) -gt 0
         } catch {
           $moduleUpdateAvailable = $false
         }
@@ -257,26 +248,26 @@ function global:Get-PwshProfile {
       }
 
       [pscustomobject]@{
-        PSTypeName = 'PwshProfile.OptionalModule'
-        Name = $module.Name
-        Description = $module.Description
-        Enabled = [bool]$module.Enabled
-        Installed = $moduleInstalled
-        ModuleVersion = $moduleVersion
-        BundleVersion = $global:PwshProfileVersion
+        PSTypeName          = 'PwshProfile.OptionalModule'
+        Name                = $module.Name
+        Description         = $module.Description
+        Enabled             = [bool]$module.Enabled
+        Installed           = $moduleInstalled
+        ModuleVersion       = $moduleVersion
+        BundleVersion       = $global:PwshProfileVersion
         LatestBundleVersion = $selectedRemoteVersion
         LatestModuleVersion = $latestModuleVersion
-        UpdateAvailable = $moduleUpdateAvailable
-        Status = $moduleStatusText
-        Path = $modulePath
+        UpdateAvailable     = $moduleUpdateAvailable
+        Status              = $moduleStatusText
+        Path                = $modulePath
       }
     }
   )
 
   $result = [pscustomobject]@{
-    PSTypeName = 'PwshProfile.Status'
-    LocalVersion = $global:PwshProfileVersion
-    StableVersion = if ($stableVersion) {
+    PSTypeName                = 'PwshProfile.Status'
+    LocalVersion              = $global:PwshProfileVersion
+    StableVersion             = if ($stableVersion) {
       $stableVersion
     } elseif ($SettingsOnly) {
       $null
@@ -285,7 +276,7 @@ function global:Get-PwshProfile {
     } else {
       'Unavailable'
     }
-    PreviewVersion = if ($previewVersion) {
+    PreviewVersion            = if ($previewVersion) {
       $previewVersion
     } elseif ($SettingsOnly) {
       $null
@@ -294,19 +285,19 @@ function global:Get-PwshProfile {
     } else {
       'Unavailable'
     }
-    EnablePreReleaseUpdate = $enablePreReleaseUpdate
-    EnablePublicIP = $enablePublicIP
-    EnableNetworkCidr = $enableNetworkCidr
-    EnableEndOfLife = $enableEndOfLife
-    EnableAzureKubernetes = $enableAzureKubernetes
-    EnableDns = $enableDns
-    EnableTlsCertificate = $enableTlsCertificate
-    UpdateChannel = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
-    OptionalModules = $moduleStatuses
-    EnabledModules = @($moduleStatuses | Where-Object Enabled | Select-Object -ExpandProperty Name)
-    DisabledModules = @($moduleStatuses | Where-Object { -not $_.Enabled } | Select-Object -ExpandProperty Name)
+    EnablePreReleaseUpdate    = $enablePreReleaseUpdate
+    EnablePublicIP            = $enablePublicIP
+    EnableNetworkCidr         = $enableNetworkCidr
+    EnableEndOfLife           = $enableEndOfLife
+    EnableAzureKubernetes     = $enableAzureKubernetes
+    EnableDns                 = $enableDns
+    EnableTlsCertificate      = $enableTlsCertificate
+    UpdateChannel             = if ($enablePreReleaseUpdate) { 'prerelease' } else { 'stable' }
+    OptionalModules           = $moduleStatuses
+    EnabledModules            = @($moduleStatuses | Where-Object Enabled | Select-Object -ExpandProperty Name)
+    DisabledModules           = @($moduleStatuses | Where-Object { -not $_.Enabled } | Select-Object -ExpandProperty Name)
     ModulesAvailableForUpdate = @($moduleStatuses | Where-Object UpdateAvailable | Select-Object -ExpandProperty Name)
-    ConfigPath = $configPath
+    ConfigPath                = $configPath
   }
 
   if ($SettingsOnly) {
@@ -376,36 +367,29 @@ function global:Set-PwshProfile {
   $changedModuleEnabled = $false
   if ($PSBoundParameters.ContainsKey('EnableReleaseUpdate')) {
     $usePrerelease = $false
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnablePreReleaseUpdate')) {
     $usePrerelease = [bool]$EnablePreReleaseUpdate
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnablePublicIP')) {
     $usePublicIP = [bool]$EnablePublicIP
     $changedModuleName = 'PwshProfile.PublicIP'
     $changedModuleEnabled = $usePublicIP
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnableNetworkCidr')) {
     $useNetworkCidr = [bool]$EnableNetworkCidr
     $changedModuleName = 'PwshProfile.NetworkCidr'
     $changedModuleEnabled = $useNetworkCidr
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnableEndOfLife')) {
     $useEndOfLife = [bool]$EnableEndOfLife
     $changedModuleName = 'PwshProfile.EndOfLife'
     $changedModuleEnabled = $useEndOfLife
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableAzureKubernetes')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnableAzureKubernetes')) {
     $useAzureKubernetes = [bool]$EnableAzureKubernetes
     $changedModuleName = 'PwshProfile.AzureKubernetes'
     $changedModuleEnabled = $useAzureKubernetes
-  }
-  elseif ($PSBoundParameters.ContainsKey('EnableDns')) {
+  } elseif ($PSBoundParameters.ContainsKey('EnableDns')) {
     $useDns = [bool]$EnableDns
     $changedModuleName = 'PwshProfile.Dns'
     $changedModuleEnabled = $useDns
-  }
-  else {
+  } else {
     $useTlsCertificate = [bool]$EnableTlsCertificate
     $changedModuleName = 'PwshProfile.TlsCertificate'
     $changedModuleEnabled = $useTlsCertificate
@@ -417,15 +401,15 @@ function global:Set-PwshProfile {
   }
 
   $settings = [ordered]@{
-    schemaVersion = 4
+    schemaVersion          = 4
     enablePreReleaseUpdate = $usePrerelease
-    enablePublicIP = $usePublicIP
-    enableNetworkCidr = $useNetworkCidr
-    enableEndOfLife = $useEndOfLife
-    enableAzureKubernetes = $useAzureKubernetes
-    enableDns = $useDns
-    enableTlsCertificate = $useTlsCertificate
-    updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
+    enablePublicIP         = $usePublicIP
+    enableNetworkCidr      = $useNetworkCidr
+    enableEndOfLife        = $useEndOfLife
+    enableAzureKubernetes  = $useAzureKubernetes
+    enableDns              = $useDns
+    enableTlsCertificate   = $useTlsCertificate
+    updatedAt              = [DateTimeOffset]::UtcNow.ToString('o')
   }
   $temporaryPath = "$configPath.$PID.tmp"
   $backupPath = "$configPath.$PID.bak"
@@ -443,15 +427,13 @@ function global:Set-PwshProfile {
         [System.IO.Path]::GetFullPath($backupPath),
         $true
       )
-    }
-    else {
+    } else {
       [System.IO.File]::Move(
         [System.IO.Path]::GetFullPath($temporaryPath),
         [System.IO.Path]::GetFullPath($configPath)
       )
     }
-  }
-  finally {
+  } finally {
     Remove-Item -LiteralPath $temporaryPath, $backupPath -Force -ErrorAction Ignore
   }
 
@@ -462,25 +444,21 @@ function global:Set-PwshProfile {
       -Force -ErrorAction Ignore
     $channel = if ($usePrerelease) { 'prerelease' } else { 'stable' }
     Write-Host "Pwsh Profile OTA channel set to $channel. Reload the profile to start a fresh update check."
-  }
-  else {
+  } else {
     $moduleDisplayName = $changedModuleName -replace '^PwshProfile\.', ''
     if ($changedModuleEnabled) {
       $modulePath = Join-Path $env:APPDATA "PwshProfile\modules\$changedModuleName\$changedModuleName.psd1"
       if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
         Write-Warning "The enabled $changedModuleName module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
-      }
-      else {
+      } else {
         try {
           Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
           Write-Host "Pwsh Profile $moduleDisplayName module enabled and loaded."
-        }
-        catch {
+        } catch {
           Write-Warning "Pwsh Profile $moduleDisplayName module was enabled but could not be loaded. $($_.Exception.Message)"
         }
       }
-    }
-    else {
+    } else {
       Remove-Module -Name $changedModuleName -Force -ErrorAction Ignore
       Write-Host "Pwsh Profile $moduleDisplayName module disabled and unloaded."
     }
@@ -499,9 +477,8 @@ function global:Get-PwshProfileVersion {
   $state = if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     try {
       Get-Content -LiteralPath $statePath -Raw -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
+      ConvertFrom-Json -ErrorAction Stop
+    } catch {
       $null
     }
   }
@@ -511,23 +488,22 @@ function global:Get-PwshProfileVersion {
   if ($latestVersion) {
     try {
       $updateAvailable = (Compare-PwshProfileSemanticVersion `
-        -Left $latestVersion `
-        -Right $global:PwshProfileVersion) -gt 0
-    }
-    catch {
+          -Left $latestVersion `
+          -Right $global:PwshProfileVersion) -gt 0
+    } catch {
       $updateAvailable = $false
     }
   }
 
   [pscustomobject]@{
-    CurrentVersion = $global:PwshProfileVersion
-    LatestVersion = $latestVersion
-    LatestTag = if ($state) { $state.latestTag } else { $null }
-    UpdateAvailable = $updateAvailable
-    CheckedChannel = if ($state) { $state.channel } else { $null }
+    CurrentVersion    = $global:PwshProfileVersion
+    LatestVersion     = $latestVersion
+    LatestTag         = if ($state) { $state.latestTag } else { $null }
+    UpdateAvailable   = $updateAvailable
+    CheckedChannel    = if ($state) { $state.channel } else { $null }
     ConfiguredChannel = (Get-PwshProfile -SettingsOnly).UpdateChannel
-    LastChecked = if ($state) { $state.checkedAt } else { $null }
-    ReleaseUrl = if ($state) { $state.releaseUrl } else { $null }
+    LastChecked       = if ($state) { $state.checkedAt } else { $null }
+    ReleaseUrl        = if ($state) { $state.releaseUrl } else { $null }
   }
 }
 
@@ -545,8 +521,7 @@ function global:Update-PwshProfile {
 
   $usePrerelease = if ($PSBoundParameters.ContainsKey('Prerelease')) {
     [bool]$Prerelease
-  }
-  else {
+  } else {
     [bool](Get-PwshProfile -SettingsOnly).EnablePreReleaseUpdate
   }
   & $setupPath -RunPhase ProfileUpdate -Prerelease:$usePrerelease
@@ -561,27 +536,27 @@ function Import-PwshProfileModules {
 
   $optionalModules = @(
     [pscustomobject]@{
-      Name = 'PwshProfile.PublicIP'
+      Name    = 'PwshProfile.PublicIP'
       Enabled = [bool]$Settings.EnablePublicIP
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.NetworkCidr'
+      Name    = 'PwshProfile.NetworkCidr'
       Enabled = [bool]$Settings.EnableNetworkCidr
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.EndOfLife'
+      Name    = 'PwshProfile.EndOfLife'
       Enabled = [bool]$Settings.EnableEndOfLife
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.AzureKubernetes'
+      Name    = 'PwshProfile.AzureKubernetes'
       Enabled = [bool]$Settings.EnableAzureKubernetes
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.Dns'
+      Name    = 'PwshProfile.Dns'
       Enabled = [bool]$Settings.EnableDns
     }
     [pscustomobject]@{
-      Name = 'PwshProfile.TlsCertificate'
+      Name    = 'PwshProfile.TlsCertificate'
       Enabled = [bool]$Settings.EnableTlsCertificate
     }
   )
@@ -591,6 +566,9 @@ function Import-PwshProfileModules {
       continue
     }
 
+    # Already loaded on a profile reload; skip the redundant reimport cost.
+    if (Get-Module -Name $module.Name) { continue }
+
     $modulePath = Join-Path $script:PwshProfileStorePath "modules\$($module.Name)\$($module.Name).psd1"
     if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
       Write-Warning "The enabled $($module.Name) module was not found: $modulePath. Run Update-PwshProfile to restore tracked assets."
@@ -598,9 +576,8 @@ function Import-PwshProfileModules {
     }
 
     try {
-      Import-Module -Name $modulePath -Global -Force -ErrorAction Stop
-    }
-    catch {
+      Import-Module -Name $modulePath -Global -ErrorAction Stop
+    } catch {
       Write-Warning "Could not import the enabled $($module.Name) module. $($_.Exception.Message)"
     }
   }
@@ -626,9 +603,8 @@ function Start-PwshProfileUpdateCheck {
   $state = if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     try {
       Get-Content -LiteralPath $statePath -Raw -ErrorAction Stop |
-        ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
+      ConvertFrom-Json -ErrorAction Stop
+    } catch {
       $null
     }
   }
@@ -636,18 +612,16 @@ function Start-PwshProfileUpdateCheck {
   if ($state -and $state.channel -eq $channel -and $state.latestVersion) {
     try {
       if ((Compare-PwshProfileSemanticVersion `
-        -Left ([string]$state.latestVersion) `
-        -Right $CurrentVersion) -gt 0) {
+            -Left ([string]$state.latestVersion) `
+            -Right $CurrentVersion) -gt 0) {
         $latestTag = if ($state.latestTag) { [string]$state.latestTag } else { "v$($state.latestVersion)" }
         if ($Prerelease) {
           Write-Warning "Pwsh Profile [Pre Release] Update Available: $latestTag. Run Update-PwshProfile -Prerelease to install it."
-        }
-        else {
+        } else {
           Write-Warning "Pwsh Profile Update Available: $latestTag. Run Update-PwshProfile to install it."
         }
       }
-    }
-    catch {
+    } catch {
       # Ignore invalid cached version data; the next check replaces it.
     }
   }
@@ -688,13 +662,13 @@ function Start-PwshProfileUpdateCheck {
 
   $pendingState = [ordered]@{
     schemaVersion = 3
-    channel = $channel
-    checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
+    channel       = $channel
+    checkedAt     = [DateTimeOffset]::UtcNow.ToString('o')
     latestVersion = if ($state -and $state.channel -eq $channel) { $state.latestVersion } else { $null }
-    latestTag = if ($state -and $state.channel -eq $channel) { $state.latestTag } else { $null }
-    releaseUrl = if ($state -and $state.channel -eq $channel) { $state.releaseUrl } else { $null }
+    latestTag     = if ($state -and $state.channel -eq $channel) { $state.latestTag } else { $null }
+    releaseUrl    = if ($state -and $state.channel -eq $channel) { $state.releaseUrl } else { $null }
     latestModules = if ($state -and $state.latestModules) { $state.latestModules } else { [ordered]@{} }
-    error = $null
+    error         = $null
   }
   $pendingJson = $pendingState | ConvertTo-Json -Depth 3
   [System.IO.File]::WriteAllText($statePath, "$pendingJson`n", [System.Text.UTF8Encoding]::new($false))
@@ -797,8 +771,7 @@ Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
   $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($checkScript))
   $executable = if ($PSVersionTable.PSEdition -eq 'Core') {
     Join-Path $PSHOME 'pwsh.exe'
-  }
-  else {
+  } else {
     Join-Path $PSHOME 'powershell.exe'
   }
 
@@ -806,36 +779,24 @@ Move-Item -LiteralPath $temporaryPath -Destination $statePath -Force
     Start-Process -FilePath $executable -ArgumentList @(
       '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', $encodedCommand
     ) -WindowStyle Hidden -ErrorAction Stop | Out-Null
-  }
-  catch {
+  } catch {
     # Update checks must never delay or break profile startup.
   }
 }
 
 #
-# Module Import
-$modules = @('Terminal-Icons')
-ForEach ($module in $modules) {
-  try {
-    Import-Module -Name $module -ErrorAction Stop
-  }
-  catch {
-    Write-Warning "Could not import '$module'. Run the Profile setup phase to restore tracked modules."
-  }
-}
-
 #
 # Oh My Posh
 
 $ompThemePath = Join-Path $env:APPDATA 'PwshProfile\themes\quick-term-cloud.omp.json'
+$terminalIconsDeferred = $false
 
 if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
   if (Test-Path -LiteralPath $ompThemePath -PathType Leaf) {
     function global:Update-PwshProfilePoshTerminalWidth {
       try {
         $env:POSH_TERMINAL_WIDTH = [string]$Host.UI.RawUI.WindowSize.Width
-      }
-      catch {
+      } catch {
         $env:POSH_TERMINAL_WIDTH = '0'
       }
     }
@@ -874,6 +835,10 @@ if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
       # OnIdle runs on the PowerShell event loop, not on a background timer.
       # Keep all console editing on that thread and leave typed input alone.
       try {
+        if (-not (Get-Module -Name Terminal-Icons)) {
+          Import-Module -Name Terminal-Icons -ErrorAction SilentlyContinue
+        }
+
         $width = $Host.UI.RawUI.WindowSize.Width
         if ($width -le 0 -or [string]$width -eq $env:POSH_TERMINAL_WIDTH) { return }
 
@@ -886,32 +851,38 @@ if (Get-Command -Name oh-my-posh -ErrorAction Ignore) {
         # does not retry on every idle event. The normal prompt also updates it.
         $env:POSH_TERMINAL_WIDTH = [string]$width
         [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
-      }
-      catch {
+      } catch {
         # Unsupported console hosts retain the normal next-prompt refresh.
       }
     }
 
     # Reloading the profile replaces only our subscription, not other idle hooks.
     Get-EventSubscriber -SourceIdentifier PowerShell.OnIdle -ErrorAction Ignore |
-      Where-Object { $_.Action.Name -eq 'PwshProfile.PoshResize' } |
-      ForEach-Object {
-        Unregister-Event -SubscriptionId $_.SubscriptionId
-        if ($_.Action) { Remove-Job -Job $_.Action -Force -ErrorAction Ignore }
-      }
+    Where-Object { $_.Action.Name -eq 'PwshProfile.PoshResize' } |
+    ForEach-Object {
+      Unregister-Event -SubscriptionId $_.SubscriptionId
+      if ($_.Action) { Remove-Job -Job $_.Action -Force -ErrorAction Ignore }
+    }
     if (Get-Command PSConsoleHostReadLine -ErrorAction Ignore) {
       $resizeJob = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -Action {
         Update-PwshProfilePoshIdleLayout
       }
       $resizeJob.Name = 'PwshProfile.PoshResize'
+      $terminalIconsDeferred = $true
     }
-  }
-  else {
+  } else {
     Write-Warning "Oh My Posh theme was not found: $ompThemePath"
   }
-}
-else {
+} else {
   Write-Warning 'Oh My Posh was not found. Install it with: winget install JanDeDobbeleer.OhMyPosh'
+}
+
+if (-not $terminalIconsDeferred) {
+  try {
+    Import-Module -Name Terminal-Icons -ErrorAction Stop
+  } catch {
+    Write-Warning "Could not import 'Terminal-Icons'. Run the Profile setup phase to restore tracked modules."
+  }
 }
 
 #
@@ -937,11 +908,9 @@ function global:Invoke-PwshProfileCompletionProcess {
     $stderrDrain = $process.StandardError.BaseStream.CopyToAsync([System.IO.Stream]::Null)
     if (-not $process.WaitForExit($TimeoutMilliseconds)) { return $false }
     return $process.ExitCode -eq 0
-  }
-  catch {
+  } catch {
     return $false
-  }
-  finally {
+  } finally {
     if ($started) {
       try {
         if (-not $process.HasExited) {
@@ -949,8 +918,7 @@ function global:Invoke-PwshProfileCompletionProcess {
           $process.Kill($true)
           $null = $process.WaitForExit(200)
         }
-      }
-      catch {
+      } catch {
         # The child may exit between HasExited and Kill.
       }
     }
@@ -986,8 +954,7 @@ if ($PSVersionTable.PSVersion.Major -ge 7 -and
         $startInfo.ArgumentList.Add('/d')
         $startInfo.ArgumentList.Add('/c')
         $startInfo.ArgumentList.Add($azCommand.Source)
-      }
-      else {
+      } else {
         $startInfo.FileName = $azCommand.Source
       }
 
@@ -1007,12 +974,11 @@ if ($PSVersionTable.PSVersion.Major -ge 7 -and
       if (-not (Invoke-PwshProfileCompletionProcess -StartInfo $startInfo)) { return }
 
       Get-Content -LiteralPath $completionFile.FullName -ErrorAction Ignore |
-        Sort-Object -Unique |
-        ForEach-Object {
+      Sort-Object -Unique |
+      ForEach-Object {
         [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
       }
-    }
-    finally {
+    } finally {
       Remove-Item -LiteralPath $completionFile.FullName -Force -ErrorAction Ignore
     }
   }
@@ -1021,9 +987,11 @@ if ($PSVersionTable.PSVersion.Major -ge 7 -and
 #
 # Pwsh Profile status display formatting
 
-try {
-  $statusFormatPath = Join-Path $env:TEMP 'PwshProfile.Status.Format.ps1xml'
-  $statusFormatXml = @'
+# Format data is per-process; skip re-registering it on a profile reload.
+if (-not (Get-FormatData -TypeName 'PwshProfile.Status' -ErrorAction Ignore)) {
+  try {
+    $statusFormatPath = Join-Path $env:TEMP 'PwshProfile.Status.Format.ps1xml'
+    $statusFormatXml = @'
 <Configuration>
   <ViewDefinitions>
     <View>
@@ -1073,11 +1041,11 @@ try {
   </ViewDefinitions>
 </Configuration>
 '@
-  [System.IO.File]::WriteAllText($statusFormatPath, $statusFormatXml, [System.Text.UTF8Encoding]::new($false))
-  Update-FormatData -AppendPath $statusFormatPath -ErrorAction Stop
-}
-catch {
-  Write-Warning "Could not load Pwsh Profile status display formatting. $($_.Exception.Message)"
+    [System.IO.File]::WriteAllText($statusFormatPath, $statusFormatXml, [System.Text.UTF8Encoding]::new($false))
+    Update-FormatData -AppendPath $statusFormatPath -ErrorAction Stop
+  } catch {
+    Write-Warning "Could not load Pwsh Profile status display formatting. $($_.Exception.Message)"
+  }
 }
 
 #
@@ -1087,14 +1055,14 @@ $profileSettings = Get-PwshProfile -SettingsOnly
 Import-PwshProfileModules -Settings $profileSettings
 try {
   Start-PwshProfileUpdateCheck `
-  -StorePath $script:PwshProfileStorePath `
-  -Repository $script:PwshProfileRepository `
-  -CurrentVersion $script:PwshProfileVersion `
-  -Prerelease:$profileSettings.EnablePreReleaseUpdate
+    -StorePath $script:PwshProfileStorePath `
+    -Repository $script:PwshProfileRepository `
+    -CurrentVersion $script:PwshProfileVersion `
+    -Prerelease:$profileSettings.EnablePreReleaseUpdate
 } catch {
   Write-Verbose "Optional profile update check failed: $($_.Exception.Message)"
 }
 
 Remove-Item Function:Import-PwshProfileModules -ErrorAction Ignore
 Remove-Item Function:Start-PwshProfileUpdateCheck -ErrorAction Ignore
-Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath, profileSettings, statusFormatPath, statusFormatXml -Scope Script -ErrorAction Ignore
+Remove-Variable -Name PwshProfileRepository, PwshProfileStorePath, profileSettings, statusFormatPath, statusFormatXml, terminalIconsDeferred -Scope Script -ErrorAction Ignore

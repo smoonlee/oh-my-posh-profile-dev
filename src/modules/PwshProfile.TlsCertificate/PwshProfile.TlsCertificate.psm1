@@ -28,20 +28,17 @@ function Invoke-TlsCertificateFileTransaction {
         if (-not $Force) { throw "'$path' appeared during generation. Use -Force to overwrite it." }
         $backups[$path] = "$($staged[$path]).bak"
         [IO.File]::Replace($staged[$path], $path, $backups[$path])
-      }
-      else { [IO.File]::Move($staged[$path], $path) }
+      } else { [IO.File]::Move($staged[$path], $path) }
       $committed.Add($path)
     }
-  }
-  catch {
+  } catch {
     $failure = $_
     $rollbackErrors = @()
     foreach ($path in $committed) {
       try {
         if ($backups.ContainsKey($path)) { [IO.File]::Copy($backups[$path], $path, $true) }
         else { [IO.File]::Delete($path) }
-      }
-      catch { $rollbackErrors += $_.Exception.Message }
+      } catch { $rollbackErrors += $_.Exception.Message }
     }
     if ($rollbackErrors.Count) {
       # Retain recovery copies if rollback was not completely successful.
@@ -49,8 +46,7 @@ function Invoke-TlsCertificateFileTransaction {
       throw "Certificate write failed: $($failure.Exception.Message) Rollback also failed: $($rollbackErrors -join '; '). Recovery .bak files were retained."
     }
     throw $failure
-  }
-  finally {
+  } finally {
     foreach ($file in @($staged.Values) + @($backups.Values)) {
       Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
     }
@@ -87,18 +83,18 @@ function New-TlsCertificateResult {
   $daysRemaining = [int][Math]::Floor(($NotAfter - (Get-Date)).TotalDays)
 
   [pscustomobject][ordered]@{
-    PSTypeName = 'PwshProfile.TlsCertificate.Result'
-    Source = $Source
-    Subject = $Subject
-    Issuer = $Issuer
-    NotBefore = $NotBefore
-    NotAfter = $NotAfter
-    DaysRemaining = $daysRemaining
-    IsExpired = $daysRemaining -lt 0
-    Thumbprint = $Thumbprint
+    PSTypeName          = 'PwshProfile.TlsCertificate.Result'
+    Source              = $Source
+    Subject             = $Subject
+    Issuer              = $Issuer
+    NotBefore           = $NotBefore
+    NotAfter            = $NotAfter
+    DaysRemaining       = $daysRemaining
+    IsExpired           = $daysRemaining -lt 0
+    Thumbprint          = $Thumbprint
     ThumbprintAlgorithm = 'SHA256'
-    Protocol = $Protocol
-    Chain = $Chain
+    Protocol            = $Protocol
+    Chain               = $Chain
   }
 }
 
@@ -130,19 +126,19 @@ function ConvertTo-TlsCertificateChainLink {
     $statusFlags = @($element.ChainElementStatus | ForEach-Object { $_.Status }) -join ', '
 
     [pscustomobject]@{
-      PSTypeName = 'PwshProfile.TlsCertificate.ChainLink'
-      Position = $index
-      Subject = $certificate.Subject
-      SubjectCommonName = Get-TlsCertificateCommonName -DistinguishedName $certificate.Subject
-      Issuer = $certificate.Issuer
-      IssuerCommonName = Get-TlsCertificateCommonName -DistinguishedName $certificate.Issuer
-      NotBefore = $certificate.NotBefore
-      NotAfter = $certificate.NotAfter
-      DaysRemaining = [int][Math]::Floor(($certificate.NotAfter - (Get-Date)).TotalDays)
-      Thumbprint = Get-TlsCertificateFingerprint -Certificate $certificate
+      PSTypeName          = 'PwshProfile.TlsCertificate.ChainLink'
+      Position            = $index
+      Subject             = $certificate.Subject
+      SubjectCommonName   = Get-TlsCertificateCommonName -DistinguishedName $certificate.Subject
+      Issuer              = $certificate.Issuer
+      IssuerCommonName    = Get-TlsCertificateCommonName -DistinguishedName $certificate.Issuer
+      NotBefore           = $certificate.NotBefore
+      NotAfter            = $certificate.NotAfter
+      DaysRemaining       = [int][Math]::Floor(($certificate.NotAfter - (Get-Date)).TotalDays)
+      Thumbprint          = Get-TlsCertificateFingerprint -Certificate $certificate
       ThumbprintAlgorithm = 'SHA256'
-      IsRoot = $certificate.Subject -eq $certificate.Issuer
-      StatusFlags = if ($statusFlags) { $statusFlags } else { 'NoError' }
+      IsRoot              = $certificate.Subject -eq $certificate.Issuer
+      StatusFlags         = if ($statusFlags) { $statusFlags } else { 'NoError' }
     }
   }
 }
@@ -210,8 +206,7 @@ namespace PwshProfile {
     catch {
       if ($deadline.Expired) { throw "TLS handshake with '$HostName`:$Port' timed out after $TimeoutSec seconds." }
       throw
-    }
-    finally { $deadline.Dispose() }
+    } finally { $deadline.Dispose() }
 
     $remoteCertificate = $sslStream.RemoteCertificate
     if (-not $remoteCertificate) {
@@ -221,8 +216,7 @@ namespace PwshProfile {
     $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($remoteCertificate)
     $chainLinks = if ($ShowChain -and $capturedChain.Count -gt 0) {
       @(ConvertTo-TlsCertificateChainLink -ChainElements $capturedChain)
-    }
-    else {
+    } else {
       $null
     }
 
@@ -235,8 +229,7 @@ namespace PwshProfile {
       -Thumbprint (Get-TlsCertificateFingerprint -Certificate $certificate) `
       -Protocol ([string]$sslStream.SslProtocol) `
       -Chain $chainLinks
-  }
-  finally {
+  } finally {
     if ($deadline) { $deadline.Dispose() }
     if ($certificate) { $certificate.Dispose() }
     if ($sslStream) { $sslStream.Dispose() }
@@ -277,8 +270,7 @@ function Get-TlsCertificateFromFile {
     [string[]] $dateFormats = @('MMM d HH:mm:ss yyyy ''GMT''', 'MMM d HH:mm:ss yyyy')
     $notBefore = [datetime]::ParseExact($notBeforeNormalized, $dateFormats, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
     $notAfter = [datetime]::ParseExact($notAfterNormalized, $dateFormats, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
-  }
-  catch {
+  } catch {
     throw "Could not parse certificate dates from OpenSSL output for '$Path'. $($_.Exception.Message)"
   }
 
@@ -315,9 +307,10 @@ function Get-TlsCertificate {
       Deadline for TCP connection and TLS handshake. Defaults to 5 seconds.
 
   .PARAMETER ShowChain
-      Include the chain inspected by .NET during the handshake in the returned
-      object's Chain property, including each link's subject, issuer, and
-      validity. The local trust store may supply certificates in this chain.
+      Print the chain inspected by .NET during the handshake, including each
+      link's subject, issuer, and validity, and populate the returned object's
+      Chain property with the same links. The local trust store may supply
+      certificates in this chain.
 
   .PARAMETER Path
       Path to a local certificate file (for example .pem, .crt, .cer) to inspect
@@ -330,7 +323,7 @@ function Get-TlsCertificate {
       Get-TlsCertificate -HostName https://example.com
 
   .EXAMPLE
-      (Get-TlsCertificate -HostName example.com -ShowChain).Chain
+      Get-TlsCertificate -HostName example.com -ShowChain
 
   .EXAMPLE
       Get-TlsCertificate -HostName example.com -Port 8443
@@ -371,8 +364,7 @@ function Get-TlsCertificate {
   if ($resolvedHostName -match '^[a-zA-Z][a-zA-Z0-9+.-]*://') {
     try {
       $parsedUri = [uri]$resolvedHostName
-    }
-    catch {
+    } catch {
       throw "'$HostName' could not be parsed as a host name or URL."
     }
 
@@ -385,6 +377,14 @@ function Get-TlsCertificate {
   $result = Get-TlsCertificateFromEndpoint -HostName $resolvedHostName -Port $resolvedPort -TimeoutSec $TimeoutSec -ShowChain:$ShowChain
 
   $result
+  if ($ShowChain) {
+    # The default table view for Result never renders Chain; print it explicitly.
+    if ($result.Chain) {
+      $result.Chain | Format-Table | Out-Host
+    } else {
+      Write-Warning "No certificate chain was captured for '$($result.Source)'."
+    }
+  }
 }
 
 function Split-PfxCertificate {
@@ -471,8 +471,7 @@ function Split-PfxCertificate {
 
   $plainPassword = if ($PSBoundParameters.ContainsKey('Password')) {
     [System.Net.NetworkCredential]::new('', $Password).Password
-  }
-  else {
+  } else {
     ''
   }
 
@@ -494,8 +493,7 @@ function Split-PfxCertificate {
 
     if ($NoKeyPassword) {
       $keyOutput = @($plainPassword) | & $opensslCommand.Name pkcs12 -in $resolvedPath -nocerts -nodes -out $keyPath -passin stdin 2>&1
-    }
-    else {
+    } else {
       $keyOutput = @($plainPassword, $plainPassword) | & $opensslCommand.Name pkcs12 -in $resolvedPath -nocerts -out $keyPath -passin stdin -passout stdin 2>&1
     }
     if ($LASTEXITCODE -ne 0) {
@@ -508,11 +506,11 @@ function Split-PfxCertificate {
   }
 
   [pscustomobject][ordered]@{
-    PSTypeName = 'PwshProfile.TlsCertificate.PfxSplitResult'
-    Source = $resolvedPath
-    PrivateKeyPath = $keyPath
-    CertificatePath = $certPath
-    ChainPath = if ((Test-Path -LiteralPath $chainPath) -and (Get-Content -LiteralPath $chainPath -Raw)) { $chainPath } else { $null }
+    PSTypeName          = 'PwshProfile.TlsCertificate.PfxSplitResult'
+    Source              = $resolvedPath
+    PrivateKeyPath      = $keyPath
+    CertificatePath     = $certPath
+    ChainPath           = if ((Test-Path -LiteralPath $chainPath) -and (Get-Content -LiteralPath $chainPath -Raw)) { $chainPath } else { $null }
     PrivateKeyEncrypted = -not $NoKeyPassword
   }
 }
@@ -605,8 +603,7 @@ function New-PfxCertificate {
   $resolvedKeyPath = (Resolve-Path -LiteralPath $PrivateKeyPath).ProviderPath
   $resolvedChainPath = if ($PSBoundParameters.ContainsKey('ChainPath')) {
     (Resolve-Path -LiteralPath $ChainPath).ProviderPath
-  }
-  else {
+  } else {
     $null
   }
 
@@ -640,11 +637,11 @@ function New-PfxCertificate {
   }
 
   [pscustomobject][ordered]@{
-    PSTypeName = 'PwshProfile.TlsCertificate.PfxCreateResult'
-    OutputPath = $OutputPath
+    PSTypeName      = 'PwshProfile.TlsCertificate.PfxCreateResult'
+    OutputPath      = $OutputPath
     CertificatePath = $resolvedCertPath
-    PrivateKeyPath = $resolvedKeyPath
-    ChainPath = $resolvedChainPath
+    PrivateKeyPath  = $resolvedKeyPath
+    ChainPath       = $resolvedChainPath
   }
 }
 
@@ -726,10 +723,10 @@ function Test-CertificateKeyMatch {
   $isMatch = (& $normalizeText $certPublicKeyOutput) -eq (& $normalizeText $keyPublicKeyOutput)
 
   [pscustomobject][ordered]@{
-    PSTypeName = 'PwshProfile.TlsCertificate.KeyMatchResult'
+    PSTypeName      = 'PwshProfile.TlsCertificate.KeyMatchResult'
     CertificatePath = $resolvedCertPath
-    PrivateKeyPath = $resolvedKeyPath
-    IsMatch = $isMatch
+    PrivateKeyPath  = $resolvedKeyPath
+    IsMatch         = $isMatch
   }
 }
 
@@ -832,18 +829,17 @@ function New-SelfSignedTlsCertificate {
   if ($PSBoundParameters.ContainsKey('KeyPassword')) {
     $arguments += @('-passout', 'stdin')
     $stdinLines += [System.Net.NetworkCredential]::new('', $KeyPassword).Password
-  }
-  else {
+  } else {
     $arguments += '-nodes'
   }
 
   Invoke-TlsCertificateFileTransaction -Paths @($keyPath, $certPath) -Force:$Force -Action {
     param($staged)
     $stagedArguments = @($arguments | ForEach-Object {
-      if ($_ -eq $keyPath) { $staged[$keyPath] }
-      elseif ($_ -eq $certPath) { $staged[$certPath] }
-      else { $_ }
-    })
+        if ($_ -eq $keyPath) { $staged[$keyPath] }
+        elseif ($_ -eq $certPath) { $staged[$certPath] }
+        else { $_ }
+      })
     $output = @($stdinLines) | & $opensslCommand.Name @stagedArguments 2>&1
     if ($LASTEXITCODE -ne 0) {
       throw "OpenSSL could not create a self-signed certificate for '$CommonName'. $(($output | Out-String).Trim())"
@@ -854,17 +850,17 @@ function New-SelfSignedTlsCertificate {
   $certInfo = Get-TlsCertificateFromFile -Path $certPath
 
   [pscustomobject][ordered]@{
-    PSTypeName = 'PwshProfile.TlsCertificate.SelfSignedResult'
-    CertificatePath = $certPath
-    PrivateKeyPath = $keyPath
-    Subject = $certInfo.Subject
-    DnsNames = @($sanEntries -replace '^DNS:', '')
-    NotBefore = $certInfo.NotBefore
-    NotAfter = $certInfo.NotAfter
-    DaysRemaining = $certInfo.DaysRemaining
-    Thumbprint = $certInfo.Thumbprint
+    PSTypeName          = 'PwshProfile.TlsCertificate.SelfSignedResult'
+    CertificatePath     = $certPath
+    PrivateKeyPath      = $keyPath
+    Subject             = $certInfo.Subject
+    DnsNames            = @($sanEntries -replace '^DNS:', '')
+    NotBefore           = $certInfo.NotBefore
+    NotAfter            = $certInfo.NotAfter
+    DaysRemaining       = $certInfo.DaysRemaining
+    Thumbprint          = $certInfo.Thumbprint
     ThumbprintAlgorithm = 'SHA256'
-    KeyEncrypted = $PSBoundParameters.ContainsKey('KeyPassword')
+    KeyEncrypted        = $PSBoundParameters.ContainsKey('KeyPassword')
   }
 }
 

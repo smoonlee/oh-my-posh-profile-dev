@@ -1,5 +1,10 @@
 # PwshProfile.TlsCertificate changelog
 
+## [1.0.2] - 2026-09-08
+
+- `-ShowChain` now prints the certificate chain table automatically instead of
+  only populating the returned object's `Chain` property.
+
 ## [1.0.1] - 2026-09-08
 
 - Bound the TLS handshake as well as TCP connection establishment.

@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.7] - 2026-09-08
+
+### Profile startup performance
+
+- Defer loading `Terminal-Icons` to the first PowerShell idle event on hosts
+  that support it, instead of blocking every prompt on its import.
+- Skip re-registering the `PwshProfile.Status` format data and rewriting its
+  temporary XML file when a profile reload already has it loaded.
+- Only reimport an already-loaded optional module on a profile reload, and
+  drop the redundant `-Force` from that startup import path.
+
+### Theme cleanup
+
+- Remove the obsolete `fetch_status` and `fetch_upstream_icon` Git segment
+  options; status and upstream data are fetched by default.
+
 ## [4.0.0-pre-release-0.9.4] - 2026-09-01
 
 ### Oh My Posh hook

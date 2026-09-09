@@ -3,7 +3,7 @@
     PowerShell profile configuration.
 #>
 
-$script:PwshProfileVersion = '4.0.0-pre-release-0.9.7'
+$script:PwshProfileVersion = '4.0.0-pre-release-0.9.8.1'
 $script:PwshProfileRepository = 'smoonlee/oh-my-posh-profile-dev'
 $script:PwshProfileStorePath = Join-Path $env:APPDATA 'PwshProfile'
 $global:PwshProfileVersion = $script:PwshProfileVersion
@@ -12,7 +12,9 @@ function global:Get-PwshProfileReleasePages {
   [CmdletBinding()]
   param([string] $Uri, [hashtable] $Headers, [int] $TimeoutSec = 15)
   for ($page = 1; ; $page++) {
-    $items = @(Invoke-RestMethod -Uri "$Uri&page=$page" -Headers $Headers -TimeoutSec $TimeoutSec -ErrorAction Stop)
+    # Invoke-RestMethod returns the JSON array as one pipeline object.
+    # Assign it directly so filtering and pagination see individual releases.
+    $items = Invoke-RestMethod -Uri "$Uri&page=$page" -Headers $Headers -TimeoutSec $TimeoutSec -ErrorAction Stop
     $items
     if ($items.Count -lt 100) { break }
   }

@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-pre-release-0.9.8.1] - 2026-09-09
+
+### Release discovery fix
+
+- Handle GitHub REST release arrays correctly so profile and module updates,
+  status reporting, and background update checks discover published releases.
+- Count releases correctly when fetching additional pages beyond 100 entries.
+- Cover REST array responses in release discovery regression tests.
+
 ## [4.0.0-pre-release-0.9.7] - 2026-09-08
 
 ### Profile startup performance

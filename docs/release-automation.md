@@ -16,7 +16,15 @@ When a merged PR changes a module manifest's `ModuleVersion`, the **Publish Pwsh
 Profile Module Updates** workflow discovers it automatically. It compares the
 base and merged versions, reads the matching module changelog section, validates
 the manifest, script, and declared format files, and creates a draft release
-tagged `PwshProfile.<Name>-v<version>`.
+tagged `PwshProfile.<Name>-v<version>`. Before creating the draft, it creates
+the Git tag at the merged commit and verifies it. An existing tag must resolve
+to that same commit; retries never move tags. This also handles a missing tag
+when retrying an unpublished draft.
+
+Direct pushes and changes without a `ModuleVersion` bump do not trigger a module
+release. Publication currently requires a PR from this repository merged into
+`main`; fork PRs are excluded by the workflow guard. Module versions use stable
+`major.minor.patch` numbers, independently of the profile prerelease channel.
 
 The workflow uploads only the files declared by that module plus
 `PwshProfile.<Name>.release.json`, which records their SHA-256 hashes. It
@@ -37,6 +45,11 @@ profile releases continue to use `v<version>` tags and self-contained bundles.
 The EndOfLife catalog workflow uses the same generic publisher. When its product
 set changes, it increments `PwshProfile.EndOfLife` to the next minor version and
 updates that module's changelog. It does not change the profile version.
+
+Run `pwsh -NoProfile -File scripts/Test-ModuleReleases.ps1` to check tag creation,
+draft retries, failure guards, and update discovery for every current module plus
+a synthetic future module. The updater discovers names from published releases
+and updates only modules already installed in the profile store.
 
 Run `pwsh -NoProfile -File scripts/Test-EndOfLifeRelease.ps1` to verify catalog
 versioning, profile/module tag isolation, and independent module installation

@@ -129,6 +129,8 @@ jobs:
             $notesPath = Join-Path $stageRoot 'release-notes.md'
             [IO.File]::WriteAllText($notesPath, $releaseNotes, [Text.UTF8Encoding]::new($false))
 
+            & ./scripts/Ensure-PwshProfileModuleTag.ps1 -Repository $env:GITHUB_REPOSITORY -Tag $tag -Commit $env:TARGET_SHA
+
             $alreadyPublished = $false
             gh release view $tag *> $null
             if ($LASTEXITCODE -eq 0) {
@@ -138,7 +140,7 @@ jobs:
               $tagCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq .sha
               if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $env:TARGET_SHA) { throw "Release $tag already points to another commit or could not be resolved." }
             } else {
-              gh release create $tag --target $env:TARGET_SHA --title $tag --notes-file $notesPath --draft
+              gh release create $tag --verify-tag --target $env:TARGET_SHA --title $tag --notes-file $notesPath --draft
               if ($LASTEXITCODE -ne 0) { throw "Could not create draft release $tag." }
             }
             $uploadPaths = @($assetDefinitions.Values | ForEach-Object { Join-Path $stageRoot $_ })

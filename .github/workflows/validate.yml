@@ -55,7 +55,7 @@ jobs:
         run: |
           Get-Command oh-my-posh, openssl -ErrorAction Stop | Select-Object Name, Source
           $tests = @(
-            'Test-ReleaseWorkflows.ps1', 'Test-RuntimeGuards.ps1', 'Test-UpdateTransactions.ps1',
+            'Test-ReleaseWorkflows.ps1', 'Test-ModuleReleases.ps1', 'Test-RuntimeGuards.ps1', 'Test-UpdateTransactions.ps1',
             'Test-PoshResize.ps1', 'Test-AzureCompletion.ps1',
             'Test-BundleRollback.ps1', 'Test-ModuleRollback.ps1',
             'Test-EndOfLifeRelease.ps1', 'Test-ModuleFixes.ps1'

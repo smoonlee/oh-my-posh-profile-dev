@@ -2,6 +2,12 @@
 
 All notable changes to the independently released module are documented here.
 
+## [1.1.0] - 2026-09-27
+
+- Refresh the supported product catalog and tab completion from endoflife.date.
+- Added products: `bind-9`, `ceph`, `chromecast`, `kiali`, `samba`.
+- Lifecycle dates continue to be fetched live when queried.
+
 ## [1.0.1] - 2026-09-07
 
 - Refresh the supported product catalog and tab completion from endoflife.date.
